@@ -34,12 +34,12 @@ The `.Del()` and `.DelGroup()` can be used to manually clear cached items when h
     fc := fastcache.New(redisstore.New(pool))
 
     // Long cache options.
-    long := fc.Options{
-        GroupKey: "user_id",
+    long := fastcache.Options{
+        NamespaceKey: "user_id",
         ETag: true,
     }
-    short := fc.Options{
-        GroupKey: "user_id",
+    short := fastcache.Options{
+        NamespaceKey: "user_id",
         TTL: time.Second * 60,
         ETag: true,
     }
