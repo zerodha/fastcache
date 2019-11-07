@@ -53,7 +53,7 @@ type Store interface {
 	Get(namespace, group, uri string) (Item, error)
 	Put(namespace, group, uri string, b Item, ttl time.Duration) error
 	Del(namespace, group, uri string) error
-	DelGroup(namespace, group string) error
+	DelGroup(namespace string, group ...string) error
 }
 
 // New creates and returns a new FastCache instance.
@@ -127,11 +127,11 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, group string, o *Optio
 }
 
 // ClearGroup middleware clears cache set by the Cached() middleware
-// for the whole group.
+// for the all the specified groups.
 //
 // This should ideally wrap write handlers (POST / PUT / DELETE)
 // and the cache is cleared when the handler responds with a 200.
-func (f *FastCache) ClearGroup(h fastglue.FastRequestHandler, group string, o *Options) fastglue.FastRequestHandler {
+func (f *FastCache) ClearGroup(h fastglue.FastRequestHandler, o *Options, groups ...string) fastglue.FastRequestHandler {
 	return func(r *fastglue.Request) error {
 		namespace, _ := r.RequestCtx.UserValue(o.NamespaceKey).(string)
 		if namespace == "" {
@@ -146,7 +146,9 @@ func (f *FastCache) ClearGroup(h fastglue.FastRequestHandler, group string, o *O
 
 		// Clear cache.
 		if r.RequestCtx.Response.StatusCode() == 200 {
-			f.DelGroup(namespace, group)
+			if err := f.DelGroup(namespace, groups...); err != nil && o.Logger != nil {
+				o.Logger.Printf("error while deleting groups '%v': %v", groups, err)
+			}
 		}
 		return nil
 	}
@@ -158,8 +160,8 @@ func (f *FastCache) Del(namespace, group, uri string) error {
 }
 
 // DelGroup deletes all cached URIs under a group.
-func (f *FastCache) DelGroup(namespace, group string) error {
-	return f.s.DelGroup(namespace, group)
+func (f *FastCache) DelGroup(namespace string, group ...string) error {
+	return f.s.DelGroup(namespace, group...)
 }
 
 // cache caches a response body.
