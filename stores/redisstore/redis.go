@@ -91,11 +91,13 @@ func (s *Store) Del(namespace, group, uri string) error {
 }
 
 // DelGroup deletes a whole group.
-func (s *Store) DelGroup(namespace, group string) error {
+func (s *Store) DelGroup(namespace string, groups ...string) error {
 	cn := s.pool.Get()
 	defer cn.Close()
 
-	cn.Send("DEL", s.key(namespace, group))
+	for _, group := range groups {
+		cn.Send("DEL", s.key(namespace, group))
+	}
 	return cn.Flush()
 }
 
