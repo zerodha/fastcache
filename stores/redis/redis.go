@@ -1,4 +1,4 @@
-// Package redisstore implements a Redis cache storage backend for fastcache.
+// Package redis implements a Redis cache storage backend for fastcache.
 // The internal structure looks like this where
 // XX1234 = namespace, marketwach = group
 // ```
@@ -11,13 +11,13 @@
 //     "/user/marketwatch/123_blob" -> []byte
 // }
 // ```
-package redisstore
+package redis
 
 import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"REDACTED/fastcache"
+	"REDACTED/commons/fastcache"
 )
 
 const (
