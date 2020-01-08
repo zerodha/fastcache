@@ -51,7 +51,7 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 
 	var out fastcache.Item
 	// Get content_type, etag, blob in that order.
-	resp, err := redis.ByteSlices(cn.Do("HMGET", s.key(namespace, group), keyCtype, keyEtag, keyBlob))
+	resp, err := redis.ByteSlices(cn.Do("HMGET", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri)))
 	if err != nil {
 		return out, err
 	}
@@ -71,9 +71,13 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 
 	key := s.key(namespace, group)
 	cn.Send("HMSET", key,
-		keyCtype, b.ContentType,
-		keyEtag, b.ETag,
-		keyBlob, b.Blob)
+		s.field(keyCtype, uri), b.ContentType,
+		s.field(keyEtag, uri), b.ETag,
+		s.field(keyBlob, uri), b.Blob)
+
+	// Set a TTL for the group. If one uri in cache group sets a TTL
+	// then entire group will be evicted. This is a short coming of using
+	// hashmap as a group. Needs some work here.
 	if ttl.Seconds() > 0 {
 		exp := ttl.Nanoseconds() / int64(time.Millisecond)
 		cn.Send("PEXPIRE", key, exp)
@@ -86,7 +90,7 @@ func (s *Store) Del(namespace, group, uri string) error {
 	cn := s.pool.Get()
 	defer cn.Close()
 
-	cn.Send("HDEL", s.key(namespace, group), uri+keyCtype, uri+keyEtag, uri+keyBlob)
+	cn.Send("HDEL", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
 	return cn.Flush()
 }
 
@@ -103,4 +107,8 @@ func (s *Store) DelGroup(namespace string, groups ...string) error {
 
 func (s *Store) key(namespace, group string) string {
 	return s.prefix + namespace + sep + group
+}
+
+func (s *Store) field(key string, uri string) string {
+	return key + "_" + uri
 }

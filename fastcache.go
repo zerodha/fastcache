@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
@@ -86,13 +87,14 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, group string, o *Optio
 			}
 			return h(r)
 		}
-		var uri string
+		var hash [16]byte
 		// If IncludeQueryString option is set then cache based on uri + md5(query_string)
 		if o.IncludeQueryString {
-			uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().FullURI()))
+			hash = md5.Sum(r.RequestCtx.URI().FullURI())
 		} else {
-			uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().Path()))
+			hash = md5.Sum(r.RequestCtx.URI().Path())
 		}
+		uri := hex.EncodeToString(hash[:])
 
 		// Fetch etag + cached bytes from the store.
 		blob, err := f.s.Get(namespace, group, uri)
@@ -187,13 +189,14 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 	}
 
 	// Write cache to the store (etag, content type, response body).
-	var uri string
+	var hash [16]byte
 	// If IncludeQueryString option is set then cache based on uri + md5(query_string)
 	if o.IncludeQueryString {
-		uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().FullURI()))
+		hash = md5.Sum(r.RequestCtx.URI().FullURI())
 	} else {
-		uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().Path()))
+		hash = md5.Sum(r.RequestCtx.URI().Path())
 	}
+	uri := hex.EncodeToString(hash[:])
 
 	err := f.s.Put(namespace, group, uri, Item{
 		ETag:        etag,
