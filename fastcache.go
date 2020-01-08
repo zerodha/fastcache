@@ -4,6 +4,7 @@ package fastcache
 
 import (
 	"bytes"
+	"crypto/md5"
 	"crypto/rand"
 	"fmt"
 	"log"
@@ -37,6 +38,9 @@ type Options struct {
 
 	// Logger is the optional logger to which errors will be written.
 	Logger *log.Logger
+
+	// Cache based on uri+querystring.
+	IncludeQueryString bool
 }
 
 // Item represents the cache entry for a single endpoint with the actual cache
@@ -82,7 +86,13 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, group string, o *Optio
 			}
 			return h(r)
 		}
-		uri := string(r.RequestCtx.Path())
+		var uri string
+		// If IncludeQueryString option is set then cache based on uri + md5(query_string)
+		if o.IncludeQueryString {
+			uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().FullURI()))
+		} else {
+			uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().Path()))
+		}
 
 		// Fetch etag + cached bytes from the store.
 		blob, err := f.s.Get(namespace, group, uri)
@@ -177,7 +187,14 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 	}
 
 	// Write cache to the store (etag, content type, response body).
-	uri := string(r.RequestCtx.Path())
+	var uri string
+	// If IncludeQueryString option is set then cache based on uri + md5(query_string)
+	if o.IncludeQueryString {
+		uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().FullURI()))
+	} else {
+		uri = fmt.Sprintf("%x", md5.Sum(r.RequestCtx.URI().Path()))
+	}
+
 	err := f.s.Put(namespace, group, uri, Item{
 		ETag:        etag,
 		ContentType: r.RequestCtx.Response.Header.ContentType(),
