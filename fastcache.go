@@ -121,12 +121,17 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, group string, o *Optio
 			}
 			r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
 			r.RequestCtx.SetContentTypeBytes(blob.ContentType)
-			r.RequestCtx.Write(blob.Blob)
+			if _, err := r.RequestCtx.Write(blob.Blob); err != nil {
+				o.Logger.Printf("error writing request: %v", err)
+			}
+
 			return nil
 		}
 
 		// Execute the actual handler.
-		h(r)
+		if err := h(r); err != nil {
+			o.Logger.Printf("error running middleware: %v", err)
+		}
 
 		// Read the response body written by the handler and cache it.
 		if r.RequestCtx.Response.StatusCode() == 200 {
@@ -154,7 +159,9 @@ func (f *FastCache) ClearGroup(h fastglue.FastRequestHandler, o *Options, groups
 		}
 
 		// Execute the actual handler.
-		h(r)
+		if err := h(r); err != nil {
+			o.Logger.Printf("error running middleware: %v", err)
+		}
 
 		// Clear cache.
 		if r.RequestCtx.Response.StatusCode() == 200 {

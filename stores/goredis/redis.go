@@ -1,4 +1,4 @@
-// Package redis implements a Redis cache storage backend for fastcache.
+// Package goredis implements a Redis cache storage backend for fastcache.
 // The internal structure looks like this where
 // XX1234 = namespace, marketwach = group
 // ```
@@ -11,12 +11,13 @@
 //     "/user/marketwatch/123_blob" -> []byte
 // }
 // ```
-package redis
+package goredis
 
 import (
+	"errors"
 	"time"
 
-	"github.com/gomodule/redigo/redis"
+	"github.com/go-redis/redis"
 	"REDACTED/commons/fastcache"
 )
 
@@ -32,48 +33,69 @@ const (
 // Store is a Redis cache store implementation for fastcache.
 type Store struct {
 	prefix string
-	pool   *redis.Pool
+	cn     *redis.Client
 }
 
 // New creates a new Redis instance. prefix is the prefix to apply to all
 // cache keys.
-func New(prefix string, pool *redis.Pool) *Store {
+func New(prefix string, client *redis.Client) *Store {
 	return &Store{
 		prefix: prefix,
-		pool:   pool,
+		cn:     client,
 	}
 }
 
 // Get gets the fastcache.Item for a single cached URI.
 func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
-	cn := s.pool.Get()
-	defer cn.Close()
-
-	var out fastcache.Item
+	var (
+		out fastcache.Item
+	)
 	// Get content_type, etag, blob in that order.
-	resp, err := redis.ByteSlices(cn.Do("HMGET", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri)))
+	cmd := s.cn.HMGet(s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
+	if err := cmd.Err(); err != nil {
+		return out, err
+	}
+
+	resp, err := cmd.Result()
 	if err != nil {
 		return out, err
 	}
 
-	out = fastcache.Item{
-		ContentType: resp[0],
-		ETag:        resp[1],
-		Blob:        resp[2],
+	if resp[0] == nil || resp[1] == nil || resp[2] == nil {
+		return out, errors.New("goredis-store: nil received")
 	}
+
+	if ctype, ok := resp[0].(string); ok {
+		out.ContentType = []byte(ctype)
+	} else {
+		return out, errors.New("goredis-store: invalid type received for ctype")
+	}
+
+	if etag, ok := resp[1].(string); ok {
+		out.ETag = []byte(etag)
+	} else {
+		return out, errors.New("goredis-store: invalid type received for etag")
+	}
+
+	if blob, ok := resp[2].(string); ok {
+		out.Blob = []byte(blob)
+	} else {
+		return out, errors.New("goredis-store: invalid type received for blob")
+	}
+
 	return out, err
 }
 
 // Put sets a value to given session but stored only on commit
 func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Duration) error {
-	cn := s.pool.Get()
-	defer cn.Close()
-
 	key := s.key(namespace, group)
-	if err := cn.Send("HMSET", key,
-		s.field(keyCtype, uri), b.ContentType,
-		s.field(keyEtag, uri), b.ETag,
-		s.field(keyBlob, uri), b.Blob); err != nil {
+	cmd := s.cn.HMSet(key,
+		map[string]interface{}{
+			s.field(keyCtype, uri): b.ContentType,
+			s.field(keyEtag, uri):  b.ETag,
+			s.field(keyBlob, uri):  b.Blob,
+		})
+	if err := cmd.Err(); err != nil {
 		return err
 	}
 
@@ -81,37 +103,35 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 	// then entire group will be evicted. This is a short coming of using
 	// hashmap as a group. Needs some work here.
 	if ttl.Seconds() > 0 {
-		exp := ttl.Nanoseconds() / int64(time.Millisecond)
-		if err := cn.Send("PEXPIRE", key, exp); err != nil {
+		cmd := s.cn.PExpire(key, ttl)
+		if err := cmd.Err(); err != nil {
 			return err
 		}
 	}
-	return cn.Flush()
+
+	return nil
 }
 
 // Del deletes a single cached URI.
 func (s *Store) Del(namespace, group, uri string) error {
-	cn := s.pool.Get()
-	defer cn.Close()
-
-	if err := cn.Send("HDEL", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri)); err != nil {
+	cmd := s.cn.HDel(s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
+	if err := cmd.Err(); err != nil {
 		return err
 	}
 
-	return cn.Flush()
+	return nil
 }
 
 // DelGroup deletes a whole group.
 func (s *Store) DelGroup(namespace string, groups ...string) error {
-	cn := s.pool.Get()
-	defer cn.Close()
-
 	for _, group := range groups {
-		if err := cn.Send("DEL", s.key(namespace, group)); err != nil {
+		cmd := s.cn.Del(s.key(namespace, group))
+		if err := cmd.Err(); err != nil {
 			return err
 		}
 	}
-	return cn.Flush()
+
+	return nil
 }
 
 func (s *Store) key(namespace, group string) string {
