@@ -41,7 +41,7 @@ func TestNew(t *testing.T) {
 	pool := New(testPrefix, redisClient)
 
 	// Check empty get, should return proper error and not panic.
-	item, err := pool.Get(testNamespace, testGroup, testEndpoint)
+	_, err := pool.Get(testNamespace, testGroup, testEndpoint)
 	assert.NotNil(t, err)
 
 	// Place something in cache,
@@ -49,7 +49,7 @@ func TestNew(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Retrieve cache
-	item, err = pool.Get(testNamespace, testGroup, testEndpoint)
+	item, err := pool.Get(testNamespace, testGroup, testEndpoint)
 	assert.Nil(t, err)
 	assert.Equal(t, testItem, item)
 
@@ -58,7 +58,7 @@ func TestNew(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Check empty get, should return proper error and not panic.
-	item, err = pool.Get(testNamespace, testGroup, testEndpoint)
+	_, err = pool.Get(testNamespace, testGroup, testEndpoint)
 	assert.NotNil(t, err)
 
 	// Invalidate
@@ -66,6 +66,6 @@ func TestNew(t *testing.T) {
 	assert.Nil(t, err)
 
 	// Check empty get, should return proper error and not panic.
-	item, err = pool.Get(testNamespace, testGroup, testEndpoint)
+	_, err = pool.Get(testNamespace, testGroup, testEndpoint)
 	assert.NotNil(t, err)
 }

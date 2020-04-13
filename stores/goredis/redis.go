@@ -47,7 +47,9 @@ func New(prefix string, client *redis.Client) *Store {
 
 // Get gets the fastcache.Item for a single cached URI.
 func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
-	var out fastcache.Item
+	var (
+		out fastcache.Item
+	)
 	// Get content_type, etag, blob in that order.
 	cmd := s.cn.HMGet(s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
 	if err := cmd.Err(); err != nil {
@@ -60,13 +62,25 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 	}
 
 	if resp[0] == nil || resp[1] == nil || resp[2] == nil {
-		return out, errors.New("goredis-store: invalid type received")
+		return out, errors.New("goredis-store: nil received")
 	}
 
-	out = fastcache.Item{
-		ContentType: []byte(resp[0].(string)),
-		ETag:        []byte(resp[1].(string)),
-		Blob:        []byte(resp[2].(string)),
+	if ctype, ok := resp[0].(string); ok {
+		out.ContentType = []byte(ctype)
+	} else {
+		return out, errors.New("goredis-store: invalid type received for ctype")
+	}
+
+	if etag, ok := resp[1].(string); ok {
+		out.ETag = []byte(etag)
+	} else {
+		return out, errors.New("goredis-store: invalid type received for etag")
+	}
+
+	if blob, ok := resp[2].(string); ok {
+		out.Blob = []byte(blob)
+	} else {
+		return out, errors.New("goredis-store: invalid type received for blob")
 	}
 
 	return out, err

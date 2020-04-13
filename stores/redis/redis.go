@@ -70,17 +70,21 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 	defer cn.Close()
 
 	key := s.key(namespace, group)
-	cn.Send("HMSET", key,
+	if err := cn.Send("HMSET", key,
 		s.field(keyCtype, uri), b.ContentType,
 		s.field(keyEtag, uri), b.ETag,
-		s.field(keyBlob, uri), b.Blob)
+		s.field(keyBlob, uri), b.Blob); err != nil {
+		return err
+	}
 
 	// Set a TTL for the group. If one uri in cache group sets a TTL
 	// then entire group will be evicted. This is a short coming of using
 	// hashmap as a group. Needs some work here.
 	if ttl.Seconds() > 0 {
 		exp := ttl.Nanoseconds() / int64(time.Millisecond)
-		cn.Send("PEXPIRE", key, exp)
+		if err := cn.Send("PEXPIRE", key, exp); err != nil {
+			return err
+		}
 	}
 	return cn.Flush()
 }
@@ -90,7 +94,10 @@ func (s *Store) Del(namespace, group, uri string) error {
 	cn := s.pool.Get()
 	defer cn.Close()
 
-	cn.Send("HDEL", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
+	if err := cn.Send("HDEL", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri)); err != nil {
+		return err
+	}
+
 	return cn.Flush()
 }
 
@@ -100,7 +107,9 @@ func (s *Store) DelGroup(namespace string, groups ...string) error {
 	defer cn.Close()
 
 	for _, group := range groups {
-		cn.Send("DEL", s.key(namespace, group))
+		if err := cn.Send("DEL", s.key(namespace, group)); err != nil {
+			return err
+		}
 	}
 	return cn.Flush()
 }
