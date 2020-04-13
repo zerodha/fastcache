@@ -14,6 +14,7 @@
 package goredis
 
 import (
+	"errors"
 	"time"
 
 	"github.com/go-redis/redis"
@@ -58,10 +59,14 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 		return out, err
 	}
 
+	if resp[0] == nil || resp[1] == nil || resp[2] == nil {
+		return out, errors.New("goredis-store: invalid type received")
+	}
+
 	out = fastcache.Item{
-		ContentType: resp[0].([]byte),
-		ETag:        resp[1].([]byte),
-		Blob:        resp[2].([]byte),
+		ContentType: []byte(resp[0].(string)),
+		ETag:        []byte(resp[1].(string)),
+		Blob:        []byte(resp[2].(string)),
 	}
 
 	return out, err
