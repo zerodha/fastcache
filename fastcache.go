@@ -78,7 +78,7 @@ func New(s Store) *FastCache {
 // group is the name for the group of requests. For instance, all the GET
 // requests for orders can have the group "orders" so that they can be cleared
 // in one shot when something changes using the Del*() methods or Clear*() middleware.
-func (f *FastCache) Cached(h fastglue.FastRequestHandler, group string, o *Options) fastglue.FastRequestHandler {
+func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group string) fastglue.FastRequestHandler {
 	return func(r *fastglue.Request) error {
 		namespace, _ := r.RequestCtx.UserValue(o.NamespaceKey).(string)
 		if namespace == "" {
