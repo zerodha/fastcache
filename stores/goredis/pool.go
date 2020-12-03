@@ -16,7 +16,6 @@ func NewPool(address string, password string, db int, maxActiv int, maxIdle int,
 		ReadTimeout:     timeout,
 		WriteTimeout:    timeout,
 		MinIdleConns:    maxIdle,
-		MaxRetries:      999999,
 		MinRetryBackoff: 500 * time.Millisecond,
 		MaxRetryBackoff: 2000 * time.Millisecond,
 	})
