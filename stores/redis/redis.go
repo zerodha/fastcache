@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"REDACTED/commons/fastcache"
+	"REDACTED/commons/fastcache/v2"
 )
 
 const (

@@ -1,4 +1,4 @@
-module REDACTED/commons/fastcache
+module REDACTED/commons/fastcache/v2
 
 go 1.12
 

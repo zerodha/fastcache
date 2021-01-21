@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis"
-	"REDACTED/commons/fastcache"
+	"REDACTED/commons/fastcache/v2"
 )
 
 const (
