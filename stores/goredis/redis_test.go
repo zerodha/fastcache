@@ -7,7 +7,7 @@ import (
 	"github.com/alicebob/miniredis"
 	"github.com/go-redis/redis"
 	"github.com/stretchr/testify/assert"
-	"REDACTED/commons/fastcache"
+	"REDACTED/commons/fastcache/v2"
 )
 
 func newTestRedis(t *testing.T) *redis.Client {
