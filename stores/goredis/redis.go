@@ -88,14 +88,16 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 
 // Put sets a value to given session but stored only on commit
 func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Duration) error {
-	key := s.key(namespace, group)
-	cmd := s.cn.HMSet(key,
-		map[string]interface{}{
-			s.field(keyCtype, uri): b.ContentType,
-			s.field(keyEtag, uri):  b.ETag,
-			s.field(keyBlob, uri):  b.Blob,
-		})
-	if err := cmd.Err(); err != nil {
+	var (
+		key = s.key(namespace, group)
+		p   = s.cn.Pipeline()
+	)
+
+	if err := p.HMSet(key, map[string]interface{}{
+		s.field(keyCtype, uri): b.ContentType,
+		s.field(keyEtag, uri):  b.ETag,
+		s.field(keyBlob, uri):  b.Blob,
+	}).Err(); err != nil {
 		return err
 	}
 
@@ -103,35 +105,34 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 	// then entire group will be evicted. This is a short coming of using
 	// hashmap as a group. Needs some work here.
 	if ttl.Seconds() > 0 {
-		cmd := s.cn.PExpire(key, ttl)
-		if err := cmd.Err(); err != nil {
+		if err := p.PExpire(key, ttl).Err(); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	_, err := p.Exec()
+	return err
 }
 
 // Del deletes a single cached URI.
 func (s *Store) Del(namespace, group, uri string) error {
-	cmd := s.cn.HDel(s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
-	if err := cmd.Err(); err != nil {
-		return err
-	}
-
-	return nil
+	return s.cn.HDel(s.key(namespace, group),
+		s.field(keyCtype, uri),
+		s.field(keyEtag, uri),
+		s.field(keyBlob, uri)).Err()
 }
 
 // DelGroup deletes a whole group.
 func (s *Store) DelGroup(namespace string, groups ...string) error {
+	p := s.cn.Pipeline()
 	for _, group := range groups {
-		cmd := s.cn.Del(s.key(namespace, group))
-		if err := cmd.Err(); err != nil {
+		if err := p.Del(s.key(namespace, group)).Err(); err != nil {
 			return err
 		}
 	}
 
-	return nil
+	_, err := p.Exec()
+	return err
 }
 
 func (s *Store) key(namespace, group string) string {
