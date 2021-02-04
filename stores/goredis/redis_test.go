@@ -1,11 +1,12 @@
 package goredis
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
 	"REDACTED/commons/fastcache/v2"
 )
@@ -20,7 +21,7 @@ func newTestRedis(t *testing.T) *redis.Client {
 		Addr: mr.Addr(),
 	})
 
-	assert.Nil(t, client.Ping().Err())
+	assert.Nil(t, client.Ping(context.TODO()).Err())
 
 	return client
 }

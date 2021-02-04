@@ -14,10 +14,11 @@
 package goredis
 
 import (
+	"context"
 	"errors"
 	"time"
 
-	"github.com/go-redis/redis"
+	"github.com/go-redis/redis/v8"
 	"REDACTED/commons/fastcache/v2"
 )
 
@@ -34,6 +35,7 @@ const (
 type Store struct {
 	prefix string
 	cn     *redis.Client
+	ctx    context.Context
 }
 
 // New creates a new Redis instance. prefix is the prefix to apply to all
@@ -42,6 +44,7 @@ func New(prefix string, client *redis.Client) *Store {
 	return &Store{
 		prefix: prefix,
 		cn:     client,
+		ctx:    context.TODO(),
 	}
 }
 
@@ -51,7 +54,7 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 		out fastcache.Item
 	)
 	// Get content_type, etag, blob in that order.
-	cmd := s.cn.HMGet(s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
+	cmd := s.cn.HMGet(s.ctx, s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
 	if err := cmd.Err(); err != nil {
 		return out, err
 	}
@@ -93,7 +96,7 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 		p   = s.cn.Pipeline()
 	)
 
-	if err := p.HMSet(key, map[string]interface{}{
+	if err := p.HMSet(s.ctx, key, map[string]interface{}{
 		s.field(keyCtype, uri): b.ContentType,
 		s.field(keyEtag, uri):  b.ETag,
 		s.field(keyBlob, uri):  b.Blob,
@@ -105,18 +108,18 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 	// then entire group will be evicted. This is a short coming of using
 	// hashmap as a group. Needs some work here.
 	if ttl.Seconds() > 0 {
-		if err := p.PExpire(key, ttl).Err(); err != nil {
+		if err := p.PExpire(s.ctx, key, ttl).Err(); err != nil {
 			return err
 		}
 	}
 
-	_, err := p.Exec()
+	_, err := p.Exec(s.ctx)
 	return err
 }
 
 // Del deletes a single cached URI.
 func (s *Store) Del(namespace, group, uri string) error {
-	return s.cn.HDel(s.key(namespace, group),
+	return s.cn.HDel(s.ctx, s.key(namespace, group),
 		s.field(keyCtype, uri),
 		s.field(keyEtag, uri),
 		s.field(keyBlob, uri)).Err()
@@ -126,12 +129,12 @@ func (s *Store) Del(namespace, group, uri string) error {
 func (s *Store) DelGroup(namespace string, groups ...string) error {
 	p := s.cn.Pipeline()
 	for _, group := range groups {
-		if err := p.Del(s.key(namespace, group)).Err(); err != nil {
+		if err := p.Del(s.ctx, s.key(namespace, group)).Err(); err != nil {
 			return err
 		}
 	}
 
-	_, err := p.Exec()
+	_, err := p.Exec(s.ctx)
 	return err
 }
 
