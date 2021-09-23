@@ -1,13 +1,11 @@
 # fastcache
 
-fastcache is a simple response caching package that plugs into fastglue. The
+fastcache is a simple response caching package that plugs into [fastglue](https://github.com/zerodha/fastglue). The
 `Cached()` middleware can be wrapped around fastglue GET handlers that need to serve
 cached bytes for a request.
 
 The `ClearGroup()` handler is meant for invalidating cache, for
-wrapping POST / PUT / DELETE handlers.
-
-It supports arbitrary backend storage implementations and ships with redigo/go-redis store implementations.
+wrapping POST / PUT / DELETE handlers. It supports arbitrary backend storage implementations and ships with redigo/go-redis store implementations.
 
 ## Concepts
 
