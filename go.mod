@@ -10,5 +10,5 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/valyala/fasthttp v1.9.0
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
-	REDACTED/commons/fastglue v1.6.3
+	github.com/zerodha/fastglue v1.6.7
 )
