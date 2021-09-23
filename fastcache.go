@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
-	"REDACTED/commons/fastglue"
+	"github.com/zerodha/fastglue"
 )
 
 // FastCache is the cache controller.
