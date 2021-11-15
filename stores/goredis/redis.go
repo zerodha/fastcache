@@ -34,13 +34,13 @@ const (
 // Store is a Redis cache store implementation for fastcache.
 type Store struct {
 	prefix string
-	cn     *redis.Client
+	cn     redis.UniversalClient
 	ctx    context.Context
 }
 
 // New creates a new Redis instance. prefix is the prefix to apply to all
 // cache keys.
-func New(prefix string, client *redis.Client) *Store {
+func New(prefix string, client redis.UniversalClient) *Store {
 	return &Store{
 		prefix: prefix,
 		cn:     client,
