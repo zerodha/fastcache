@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
-	"github.com/zerodha/fastcache/v2"
+	"github.com/zerodha/fastcache/v3"
 )
 
 const (

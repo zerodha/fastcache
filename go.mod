@@ -1,4 +1,4 @@
-module github.com/zerodha/fastcache/v2
+module github.com/zerodha/fastcache/v3
 
 go 1.12
 
