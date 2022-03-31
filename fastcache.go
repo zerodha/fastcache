@@ -61,6 +61,8 @@ type Store interface {
 	DelGroup(namespace string, group ...string) error
 }
 
+var cacheNoStore = []byte("no-store")
+
 // New creates and returns a new FastCache instance.
 func New(s Store) *FastCache {
 	return &FastCache{
@@ -135,8 +137,11 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 
 		// Read the response body written by the handler and cache it.
 		if r.RequestCtx.Response.StatusCode() == 200 {
-			if err := f.cache(r, namespace, group, o); err != nil {
-				o.Logger.Println(err.Error())
+			// If "no-store" is set in the cache control header, don't cache.
+			if !bytes.Contains(r.RequestCtx.Response.Header.Peek("Cache-Control"), cacheNoStore) {
+				if err := f.cache(r, namespace, group, o); err != nil {
+					o.Logger.Println(err.Error())
+				}
 			}
 		}
 		return nil
