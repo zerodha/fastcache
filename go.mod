@@ -8,7 +8,7 @@ require (
 	github.com/go-redis/redis/v8 v8.4.11
 	github.com/gomodule/redigo v2.0.0+incompatible
 	github.com/stretchr/testify v1.6.1
-	github.com/valyala/fasthttp v1.9.0
+	github.com/valyala/fasthttp v1.34.0
 	github.com/yuin/gopher-lua v0.0.0-20191220021717-ab39c6098bdb // indirect
 	github.com/zerodha/fastglue v1.6.7
 )
