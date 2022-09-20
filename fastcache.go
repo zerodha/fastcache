@@ -37,6 +37,11 @@ type Options struct {
 	// Process ETags and send 304s?
 	ETag bool
 
+	// By default, handler response bodies are cached and served. If this is
+	// enabled, only ETags are cached and for response bodies, the original
+	// handler is invoked.
+	NoBlob bool
+
 	// Logger is the optional logger to which errors will be written.
 	Logger *log.Logger
 
@@ -210,10 +215,15 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 	}
 	uri := hex.EncodeToString(hash[:])
 
+	var blob []byte
+	if !o.NoBlob {
+		blob = r.RequestCtx.Response.Body()
+	}
+
 	err := f.s.Put(namespace, group, uri, Item{
 		ETag:        etag,
 		ContentType: r.RequestCtx.Response.Header.ContentType(),
-		Blob:        r.RequestCtx.Response.Body(),
+		Blob:        blob,
 	}, o.TTL)
 	if err != nil && o.Logger != nil {
 		return fmt.Errorf("error writing cache to store: %v", err)
