@@ -42,6 +42,14 @@ func init() {
 			Logger:       log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
 		}
 
+		noBlob = &fastcache.Options{
+			NamespaceKey: namespaceKey,
+			ETag:         true,
+			TTL:          time.Second * 60,
+			NoBlob:       true,
+			Logger:       log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
+		}
+
 		fc = fastcache.New(cachestore.New("CACHE:", redis.NewClient(&redis.Options{
 			Addr: rd.Addr(),
 		})))
@@ -61,6 +69,10 @@ func init() {
 		r.RequestCtx.Response.Header.Set("Cache-Control", "no-store")
 		return r.SendBytes(200, "text/plain", []byte("ok"))
 	}, ttlShort, group))
+
+	srv.GET("/no-blob", fc.Cached(func(r *fastglue.Request) error {
+		return r.SendBytes(200, "text/plain", []byte("ok"))
+	}, noBlob, group))
 
 	srv.GET("/clear-group", fc.ClearGroup(func(r *fastglue.Request) error {
 		return r.SendBytes(200, "text/plain", []byte("ok"))
@@ -155,6 +167,25 @@ func TestNoCache(t *testing.T) {
 		}
 		if b != "ok" {
 			t.Fatalf("expected 'ok' in body but got %v", b)
+		}
+	}
+}
+
+func TestNoBlob(t *testing.T) {
+	// All requests should return 200.
+	eTag := ""
+	for n := 0; n < 3; n++ {
+		r, _ := getReq(srvRoot+"/no-blob", eTag, t)
+		if n == 0 {
+			eTag = r.Header.Get("Etag")
+			if r.StatusCode != 200 {
+				t.Fatalf("expected 200 but got %v", r.StatusCode)
+			}
+			continue
+		}
+
+		if r.StatusCode != 304 {
+			t.Fatalf("expected 304 but got %v", r.StatusCode)
 		}
 	}
 }
