@@ -3,6 +3,7 @@ package fastcache_test
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -70,6 +71,49 @@ func init() {
 			Logger:       log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
 		}
 
+		includeQS = &fastcache.Options{
+			NamespaceKey:       namespaceKey,
+			ETag:               true,
+			TTL:                time.Second * 5,
+			Logger:             log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
+			IncludeQueryString: true,
+		}
+
+		includeQSNoEtag = &fastcache.Options{
+			NamespaceKey:       namespaceKey,
+			ETag:               false,
+			TTL:                time.Second * 5,
+			Logger:             log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
+			IncludeQueryString: true,
+		}
+
+		includeQSSpecific = &fastcache.Options{
+			NamespaceKey:       namespaceKey,
+			ETag:               true,
+			TTL:                time.Second * 5,
+			Logger:             log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
+			IncludeQueryString: true,
+			QueryArgsTransformerHook: func(args *fasthttp.Args) {
+				// Copy the keys to delete, and delete them later. This is to
+				// avoid borking the VisitAll() iterator.
+				mp := map[string]struct{}{
+					"foo": {},
+				}
+
+				delKeys := [][]byte{}
+				args.VisitAll(func(k, v []byte) {
+					if _, ok := mp[string(k)]; !ok {
+						delKeys = append(delKeys, k)
+					}
+				})
+
+				// Delete the keys.
+				for _, k := range delKeys {
+					args.DelBytes(k)
+				}
+			},
+		}
+
 		fc = fastcache.New(cachestore.New("CACHE:", redis.NewClient(&redis.Options{
 			Addr: rd.Addr(),
 		})))
@@ -101,6 +145,19 @@ func init() {
 	srv.GET("/clear-group", fc.ClearGroup(func(r *fastglue.Request) error {
 		return r.SendBytes(200, "text/plain", content)
 	}, cfgDefault, group))
+
+	srv.GET("/include-qs", fc.Cached(func(r *fastglue.Request) error {
+		return r.SendBytes(200, "text/plain", content)
+	}, includeQS, group))
+
+	srv.GET("/include-qs-no-etag", fc.Cached(func(r *fastglue.Request) error {
+		out := time.Now()
+		return r.SendBytes(200, "text/plain", []byte(fmt.Sprintf("%v", out)))
+	}, includeQSNoEtag, group))
+
+	srv.GET("/include-qs-specific", fc.Cached(func(r *fastglue.Request) error {
+		return r.SendBytes(200, "text/plain", content)
+	}, includeQSSpecific, group))
 
 	// Start the server
 	go func() {
@@ -177,6 +234,7 @@ func TestCache(t *testing.T) {
 	if r.StatusCode != 200 {
 		t.Fatalf("expected 200 but got %v", r.StatusCode)
 	}
+
 	r, b = getReq(srvRoot+"/cached", r.Header.Get("Etag"), false, t)
 	if r.StatusCode != 200 {
 		t.Fatalf("expected 200 but got '%v'", r.StatusCode)
@@ -210,6 +268,103 @@ func TestCache(t *testing.T) {
 
 	if !bytes.Equal(decomp, content) {
 		t.Fatalf("expected test content in body but got %v", b)
+	}
+}
+
+func TestQueryString(t *testing.T) {
+	// First request should be 200.
+	r, b := getReq(srvRoot+"/include-qs?foo=bar", "", false, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got %v", r.StatusCode)
+	}
+
+	if !bytes.Equal(b, content) {
+		t.Fatalf("expected 'ok' in body but got %v", b)
+	}
+
+	// Second should be 304.
+	r, _ = getReq(srvRoot+"/include-qs?foo=bar", r.Header.Get("Etag"), false, t)
+	if r.StatusCode != 304 {
+		t.Fatalf("expected 304 but got '%v'", r.StatusCode)
+	}
+}
+
+func TestQueryStringLexicographical(t *testing.T) {
+	// First request should be 200.
+	r, b := getReq(srvRoot+"/include-qs?foo=bar&baz=qux", "", false, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got %v", r.StatusCode)
+	}
+
+	if !bytes.Equal(b, content) {
+		t.Fatalf("expected 'ok' in body but got %v", b)
+	}
+
+	// Second should be 304.
+	r, _ = getReq(srvRoot+"/include-qs?baz=qux&foo=bar", r.Header.Get("Etag"), false, t)
+	if r.StatusCode != 304 {
+		t.Fatalf("expected 304 but got '%v'", r.StatusCode)
+	}
+}
+
+func TestQueryStringWithoutEtag(t *testing.T) {
+	// First request should be 200.
+	r, b := getReq(srvRoot+"/include-qs-no-etag?foo=bar", "", false, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got %v", r.StatusCode)
+	}
+
+	// Second should be 200 but with same response.
+	r2, b2 := getReq(srvRoot+"/include-qs-no-etag?foo=bar", "", false, t)
+	if r2.StatusCode != 200 {
+		t.Fatalf("expected 200 but got '%v'", r2.StatusCode)
+	}
+
+	if !bytes.Equal(b, b2) {
+		t.Fatalf("expected '%v' in body but got %v", b, b2)
+	}
+
+	// Third should be 200 but with different response.
+	r3, b3 := getReq(srvRoot+"/include-qs-no-etag?foo=baz", "", false, t)
+	if r3.StatusCode != 200 {
+		t.Fatalf("expected 200 but got '%v'", r3.StatusCode)
+	}
+
+	// time should be different
+	if bytes.Equal(b, b3) {
+		t.Fatalf("expected both to be different (should not be %v), but got %v", b, b3)
+	}
+}
+
+func TestQueryStringSpecific(t *testing.T) {
+	// First request should be 200.
+	r1, b := getReq(srvRoot+"/include-qs-specific?foo=bar&baz=qux", "", false, t)
+	if r1.StatusCode != 200 {
+		t.Fatalf("expected 200 but got %v", r1.StatusCode)
+	}
+	if !bytes.Equal(b, content) {
+		t.Fatalf("expected 'ok' in body but got %v", b)
+	}
+
+	// Second should be 304.
+	r, _ := getReq(srvRoot+"/include-qs-specific?foo=bar&baz=qux", r1.Header.Get("Etag"), false, t)
+	if r.StatusCode != 304 {
+		t.Fatalf("expected 304 but got '%v'", r.StatusCode)
+	}
+
+	// Third should be 304 as foo=bar
+	r, _ = getReq(srvRoot+"/include-qs-specific?loo=mar&foo=bar&baz=qux&quux=quuz", r1.Header.Get("Etag"), false, t)
+	if r.StatusCode != 304 {
+		t.Fatalf("expected 304 but got '%v'", r.StatusCode)
+	}
+
+	// Fourth should be 200 as foo=rab
+	r, b = getReq(srvRoot+"/include-qs-specific?foo=rab&baz=qux&quux=quuz", r1.Header.Get("Etag"), false, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got '%v'", r.StatusCode)
+	}
+	if !bytes.Equal(b, content) {
+		t.Fatalf("expected 'ok' in body but got %v", b)
 	}
 }
 

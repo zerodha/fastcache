@@ -68,7 +68,13 @@ type Options struct {
 	// Cache based on uri+querystring.
 	IncludeQueryString bool
 
+	// Compression options.
 	Compression CompressionsOptions
+
+	// QueryArgsTransformerHook is a hook that can be used to transform the query string
+	// before it is used to generate the cache key. This can be used to selectively
+	// include / exclude query parameters from the cache key.
+	QueryArgsTransformerHook func(*fasthttp.Args)
 }
 
 // Item represents the cache entry for a single endpoint with the actual cache
@@ -126,14 +132,7 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 			o.Compression.MinLength = 500
 		}
 
-		var hash [16]byte
-		// If IncludeQueryString option is set then cache based on uri + md5(query_string)
-		if o.IncludeQueryString {
-			hash = md5.Sum(r.RequestCtx.URI().FullURI())
-		} else {
-			hash = md5.Sum(r.RequestCtx.URI().Path())
-		}
-		uri := hex.EncodeToString(hash[:])
+		uri := f.makeURI(r, o)
 
 		// Fetch etag + cached bytes from the store.
 		blob, err := f.s.Get(namespace, group, uri)
@@ -245,6 +244,44 @@ func (f *FastCache) DelGroup(namespace string, group ...string) error {
 	return f.s.DelGroup(namespace, group...)
 }
 
+func (f *FastCache) makeURI(r *fastglue.Request, o *Options) string {
+	var hash [16]byte
+
+	// lexicographically sort the query string.
+	r.RequestCtx.QueryArgs().Sort(func(x, y []byte) int {
+		return bytes.Compare(x, y)
+	})
+
+	// If IncludeQueryString option is set then cache based on uri + md5(query_string)
+	if o.IncludeQueryString {
+		id := r.RequestCtx.URI().FullURI()
+
+		// Check if we need to include only specific query params.
+		if o.QueryArgsTransformerHook != nil {
+			// Acquire a copy so as to not modify the request.
+			uriRaw := fasthttp.AcquireURI()
+			r.RequestCtx.URI().CopyTo(uriRaw)
+
+			q := uriRaw.QueryArgs()
+
+			// Call the hook to transform the query string.
+			o.QueryArgsTransformerHook(q)
+
+			// Get the new URI.
+			id = uriRaw.FullURI()
+
+			// Release the borrowed URI.
+			fasthttp.ReleaseURI(uriRaw)
+		}
+
+		hash = md5.Sum(id)
+	} else {
+		hash = md5.Sum(r.RequestCtx.URI().Path())
+	}
+
+	return hex.EncodeToString(hash[:])
+}
+
 // cache caches a response body.
 func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Options) error {
 	// ETag?.
@@ -258,14 +295,7 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 	}
 
 	// Write cache to the store (etag, content type, response body).
-	var hash [16]byte
-	// If IncludeQueryString option is set then cache based on uri + md5(query_string)
-	if o.IncludeQueryString {
-		hash = md5.Sum(r.RequestCtx.URI().FullURI())
-	} else {
-		hash = md5.Sum(r.RequestCtx.URI().Path())
-	}
-	uri := hex.EncodeToString(hash[:])
+	uri := f.makeURI(r, o)
 
 	var blob []byte
 	if !o.NoBlob {

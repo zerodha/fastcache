@@ -57,6 +57,7 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 	var (
 		out fastcache.Item
 	)
+
 	// Get content_type, etag, blob in that order.
 	cmd := s.cn.HMGet(s.ctx, s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyCompression, uri), s.field(keyBlob, uri))
 	if err := cmd.Err(); err != nil {
