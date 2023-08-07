@@ -2,14 +2,16 @@
 // The internal structure looks like this where
 // XX1234 = namespace, marketwach = group
 // ```
-// CACHE:XX1234:marketwatch {
-//     "/user/marketwatch_ctype" -> []byte
-//     "/user/marketwatch_etag" -> []byte
-//     "/user/marketwatch_blob" -> []byte
-//     "/user/marketwatch/123_ctype" -> []byte
-//     "/user/marketwatch/123_etag" -> []byte
-//     "/user/marketwatch/123_blob" -> []byte
-// }
+//
+//	CACHE:XX1234:marketwatch {
+//	    "/user/marketwatch_ctype" -> []byte
+//	    "/user/marketwatch_etag" -> []byte
+//	    "/user/marketwatch_blob" -> []byte
+//	    "/user/marketwatch/123_ctype" -> []byte
+//	    "/user/marketwatch/123_etag" -> []byte
+//	    "/user/marketwatch/123_blob" -> []byte
+//	}
+//
 // ```
 package goredis
 
@@ -53,6 +55,7 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 	var (
 		out fastcache.Item
 	)
+
 	// Get content_type, etag, blob in that order.
 	cmd := s.cn.HMGet(s.ctx, s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
 	if err := cmd.Err(); err != nil {
