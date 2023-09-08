@@ -1,6 +1,6 @@
 module github.com/zerodha/fastcache/v3
 
-go 1.12
+go 1.16
 
 require (
 	github.com/alicebob/gopher-json v0.0.0-20180125190556-5a6b3ba71ee6 // indirect
