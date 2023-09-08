@@ -1,7 +1,7 @@
 package fastcache_test
 
 import (
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -111,7 +111,7 @@ func getReq(url, etag string, t *testing.T) (*http.Response, string) {
 		t.Fatal(err)
 	}
 
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		t.Fatal(b)
 	}

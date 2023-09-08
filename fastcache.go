@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/valyala/fasthttp"
@@ -52,8 +53,8 @@ type Options struct {
 // Item represents the cache entry for a single endpoint with the actual cache
 // body and metadata.
 type Item struct {
-	ContentType []byte
-	ETag        []byte
+	ContentType string
+	ETag        string
 	Blob        []byte
 }
 
@@ -113,9 +114,9 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 		// with the stored one (if there's any).
 		if o.ETag {
 			var (
-				match = r.RequestCtx.Request.Header.Peek("If-None-Match")
+				match = string(r.RequestCtx.Request.Header.Peek("If-None-Match"))
 			)
-			if len(match) > 4 && len(blob.ETag) > 0 && bytes.Contains(match, blob.ETag) {
+			if len(match) > 4 && len(blob.ETag) > 0 && strings.Contains(match, blob.ETag) {
 				r.RequestCtx.SetStatusCode(fasthttp.StatusNotModified)
 				return nil
 			}
@@ -127,7 +128,7 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 				r.RequestCtx.Response.Header.Add("ETag", `"`+string(blob.ETag)+`"`)
 			}
 			r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
-			r.RequestCtx.SetContentTypeBytes(blob.ContentType)
+			r.RequestCtx.SetContentType(blob.ContentType)
 			if _, err := r.RequestCtx.Write(blob.Blob); err != nil && o.Logger != nil {
 				o.Logger.Printf("error writing request: %v", err)
 			}
@@ -196,13 +197,13 @@ func (f *FastCache) DelGroup(namespace string, group ...string) error {
 // cache caches a response body.
 func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Options) error {
 	// ETag?.
-	var etag []byte
+	var etag string
 	if o.ETag {
 		e, err := generateRandomString(16)
 		if err != nil {
 			return fmt.Errorf("error generating etag: %v", err)
 		}
-		etag = e
+		etag = string(e)
 	}
 
 	// Write cache to the store (etag, content type, response body).
@@ -222,7 +223,7 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 
 	err := f.s.Put(namespace, group, uri, Item{
 		ETag:        etag,
-		ContentType: r.RequestCtx.Response.Header.ContentType(),
+		ContentType: string(r.RequestCtx.Response.Header.ContentType()),
 		Blob:        blob,
 	}, o.TTL)
 	if err != nil && o.Logger != nil {
