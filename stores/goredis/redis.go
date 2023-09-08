@@ -2,14 +2,16 @@
 // The internal structure looks like this where
 // XX1234 = namespace, marketwach = group
 // ```
-// CACHE:XX1234:marketwatch {
-//     "/user/marketwatch_ctype" -> []byte
-//     "/user/marketwatch_etag" -> []byte
-//     "/user/marketwatch_blob" -> []byte
-//     "/user/marketwatch/123_ctype" -> []byte
-//     "/user/marketwatch/123_etag" -> []byte
-//     "/user/marketwatch/123_blob" -> []byte
-// }
+//
+//	CACHE:XX1234:marketwatch {
+//	    "/user/marketwatch_ctype" -> []byte
+//	    "/user/marketwatch_etag" -> []byte
+//	    "/user/marketwatch_blob" -> []byte
+//	    "/user/marketwatch/123_ctype" -> []byte
+//	    "/user/marketwatch/123_etag" -> []byte
+//	    "/user/marketwatch/123_blob" -> []byte
+//	}
+//
 // ```
 package goredis
 
@@ -17,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"time"
+	"unsafe"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/zerodha/fastcache/v3"
@@ -69,19 +72,19 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 	}
 
 	if ctype, ok := resp[0].(string); ok {
-		out.ContentType = []byte(ctype)
+		out.ContentType = ctype
 	} else {
 		return out, errors.New("goredis-store: invalid type received for ctype")
 	}
 
 	if etag, ok := resp[1].(string); ok {
-		out.ETag = []byte(etag)
+		out.ETag = etag
 	} else {
 		return out, errors.New("goredis-store: invalid type received for etag")
 	}
 
 	if blob, ok := resp[2].(string); ok {
-		out.Blob = []byte(blob)
+		out.Blob = stringToBytes(blob)
 	} else {
 		return out, errors.New("goredis-store: invalid type received for blob")
 	}
@@ -144,4 +147,16 @@ func (s *Store) key(namespace, group string) string {
 
 func (s *Store) field(key string, uri string) string {
 	return key + "_" + uri
+}
+
+// stringToBytes converts string to byte slice using unsafe.
+// Copied from: https://github.com/go-redis/redis/blob/803592d454c49277405303fa6261dc090db542d2/internal/util/unsafe.go
+// Context: https://github.com/redis/go-redis/issues/1618
+func stringToBytes(s string) []byte {
+	return *(*[]byte)(unsafe.Pointer(
+		&struct {
+			string
+			Cap int
+		}{s, len(s)},
+	))
 }

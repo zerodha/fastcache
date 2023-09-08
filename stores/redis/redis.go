@@ -2,14 +2,16 @@
 // The internal structure looks like this where
 // XX1234 = namespace, marketwach = group
 // ```
-// CACHE:XX1234:marketwatch {
-//     "/user/marketwatch_ctype" -> []byte
-//     "/user/marketwatch_etag" -> []byte
-//     "/user/marketwatch_blob" -> []byte
-//     "/user/marketwatch/123_ctype" -> []byte
-//     "/user/marketwatch/123_etag" -> []byte
-//     "/user/marketwatch/123_blob" -> []byte
-// }
+//
+//	CACHE:XX1234:marketwatch {
+//	    "/user/marketwatch_ctype" -> []byte
+//	    "/user/marketwatch_etag" -> []byte
+//	    "/user/marketwatch_blob" -> []byte
+//	    "/user/marketwatch/123_ctype" -> []byte
+//	    "/user/marketwatch/123_etag" -> []byte
+//	    "/user/marketwatch/123_blob" -> []byte
+//	}
+//
 // ```
 package redis
 
@@ -57,8 +59,8 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 	}
 
 	out = fastcache.Item{
-		ContentType: resp[0],
-		ETag:        resp[1],
+		ContentType: string(resp[0]),
+		ETag:        string(resp[1]),
 		Blob:        resp[2],
 	}
 	return out, err

@@ -34,8 +34,8 @@ func TestNew(t *testing.T) {
 	testGroup := "group"
 	testEndpoint := "/test/endpoint"
 	testItem := fastcache.Item{
-		ETag:        []byte("etag"),
-		ContentType: []byte("content_type"),
+		ETag:        "etag",
+		ContentType: "content_type",
 		Blob:        []byte("{}"),
 	}
 
