@@ -4,10 +4,12 @@ package fastcache
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"strings"
 	"time"
@@ -19,6 +21,22 @@ import (
 // FastCache is the cache controller.
 type FastCache struct {
 	s Store
+}
+
+// CompressionsOptions defines gzip compression options.
+type CompressionsOptions struct {
+	// Enabled causes all blobs to be compressed before writing to the store, as long
+	// as the blog is of MinLength length.
+	Enabled bool
+
+	// MinLength is the minimum number of bytes in the response which causes it to be compressed
+	// before being stored. Default is 500 bytes.
+	MinLength int
+
+	// If RespectHeaders is true, then `Accept-encoding` header is considered and an
+	// appropriate blob, compressed or uncompressed is returned. When set to false,
+	// the stored response is always decompressed and the resultant decompressed data is served.
+	RespectHeaders bool
 }
 
 // Options has FastCache options.
@@ -48,12 +66,15 @@ type Options struct {
 
 	// Cache based on uri+querystring.
 	IncludeQueryString bool
+
+	Compression CompressionsOptions
 }
 
 // Item represents the cache entry for a single endpoint with the actual cache
 // body and metadata.
 type Item struct {
 	ContentType string
+	Compression string
 	ETag        string
 	Blob        []byte
 }
@@ -66,6 +87,8 @@ type Store interface {
 	Del(namespace, group, uri string) error
 	DelGroup(namespace string, group ...string) error
 }
+
+const compGzip = "gzip"
 
 var cacheNoStore = []byte("no-store")
 
@@ -95,6 +118,11 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 			}
 			return h(r)
 		}
+
+		if o.Compression.Enabled && o.Compression.MinLength < 1 {
+			o.Compression.MinLength = 500
+		}
+
 		var hash [16]byte
 		// If IncludeQueryString option is set then cache based on uri + md5(query_string)
 		if o.IncludeQueryString {
@@ -129,7 +157,25 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 			}
 			r.RequestCtx.SetStatusCode(fasthttp.StatusOK)
 			r.RequestCtx.SetContentType(blob.ContentType)
-			if _, err := r.RequestCtx.Write(blob.Blob); err != nil && o.Logger != nil {
+
+			out := blob.Blob
+
+			// Compression is enabled.
+			if o.Compression.Enabled && blob.Compression == compGzip {
+				// Header is requesting for gzipped content.
+				if o.Compression.RespectHeaders && r.RequestCtx.Request.Header.HasAcceptEncoding(compGzip) {
+					r.RequestCtx.Request.Header.Set("Content-Encoding", compGzip)
+				} else {
+					// Decompress the compressed blob and send uncompressed response.
+					b, err := decompressGzip(out)
+					if err != nil {
+						o.Logger.Printf("error decompressing blob: %v", err)
+					}
+					out = b
+				}
+			}
+
+			if _, err := r.RequestCtx.Write(out); err != nil && o.Logger != nil {
 				o.Logger.Printf("error writing request: %v", err)
 			}
 
@@ -221,11 +267,24 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 		blob = r.RequestCtx.Response.Body()
 	}
 
-	err := f.s.Put(namespace, group, uri, Item{
+	item := Item{
 		ETag:        etag,
 		ContentType: string(r.RequestCtx.Response.Header.ContentType()),
 		Blob:        blob,
-	}, o.TTL)
+	}
+
+	// Optionally compress the response.
+	if o.Compression.Enabled && len(blob) >= o.Compression.MinLength {
+		b, err := compressGzip(blob)
+		if err != nil {
+			o.Logger.Printf("error compressing blob: %v", err)
+		} else {
+			item.Blob = b
+			item.Compression = compGzip
+		}
+	}
+
+	err := f.s.Put(namespace, group, uri, item, o.TTL)
 	if err != nil && o.Logger != nil {
 		return fmt.Errorf("error writing cache to store: %v", err)
 	}
@@ -252,4 +311,26 @@ func generateRandomString(totalLen int) (string, error) {
 		bytes[k] = dictionary[v%byte(len(dictionary))]
 	}
 	return string(bytes), nil
+}
+
+func compressGzip(b []byte) ([]byte, error) {
+	var buf bytes.Buffer
+
+	w := gzip.NewWriter(&buf)
+	if _, err := w.Write(b); err != nil {
+		return nil, err
+	}
+	w.Close()
+
+	return buf.Bytes(), nil
+}
+
+func decompressGzip(b []byte) ([]byte, error) {
+	r, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	return io.ReadAll(r)
 }

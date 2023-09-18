@@ -1,6 +1,8 @@
 package fastcache_test
 
 import (
+	"bytes"
+	"compress/gzip"
 	"io"
 	"log"
 	"net/http"
@@ -25,6 +27,8 @@ const (
 
 var (
 	srv = fastglue.NewGlue()
+
+	content = []byte("this is the reasonbly long test content that may be compressed")
 )
 
 func init() {
@@ -35,11 +39,27 @@ func init() {
 	}
 
 	var (
-		ttlShort = &fastcache.Options{
+		cfgDefault = &fastcache.Options{
 			NamespaceKey: namespaceKey,
 			ETag:         true,
 			TTL:          time.Second * 5,
 			Logger:       log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
+			Compression: fastcache.CompressionsOptions{
+				Enabled:   true,
+				MinLength: 10,
+			},
+		}
+
+		cfgCompressed = &fastcache.Options{
+			NamespaceKey: namespaceKey,
+			ETag:         true,
+			TTL:          time.Second * 5,
+			Logger:       log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
+			Compression: fastcache.CompressionsOptions{
+				Enabled:        true,
+				MinLength:      10,
+				RespectHeaders: true,
+			},
 		}
 
 		noBlob = &fastcache.Options{
@@ -62,21 +82,25 @@ func init() {
 	})
 
 	srv.GET("/cached", fc.Cached(func(r *fastglue.Request) error {
-		return r.SendBytes(200, "text/plain", []byte("ok"))
-	}, ttlShort, group))
+		return r.SendBytes(200, "text/plain", content)
+	}, cfgDefault, group))
 
 	srv.GET("/no-store", fc.Cached(func(r *fastglue.Request) error {
 		r.RequestCtx.Response.Header.Set("Cache-Control", "no-store")
-		return r.SendBytes(200, "text/plain", []byte("ok"))
-	}, ttlShort, group))
+		return r.SendBytes(200, "text/plain", content)
+	}, cfgDefault, group))
 
 	srv.GET("/no-blob", fc.Cached(func(r *fastglue.Request) error {
-		return r.SendBytes(200, "text/plain", []byte("ok"))
+		return r.SendBytes(200, "text/plain", content)
 	}, noBlob, group))
 
+	srv.GET("/compressed", fc.Cached(func(r *fastglue.Request) error {
+		return r.SendBytes(200, "text/plain", content)
+	}, cfgCompressed, group))
+
 	srv.GET("/clear-group", fc.ClearGroup(func(r *fastglue.Request) error {
-		return r.SendBytes(200, "text/plain", []byte("ok"))
-	}, ttlShort, group))
+		return r.SendBytes(200, "text/plain", content)
+	}, cfgDefault, group))
 
 	// Start the server
 	go func() {
@@ -93,7 +117,7 @@ func init() {
 	time.Sleep(time.Millisecond * 100)
 }
 
-func getReq(url, etag string, t *testing.T) (*http.Response, string) {
+func getReq(url, etag string, gzipped bool, t *testing.T) (*http.Response, []byte) {
 	client := http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -106,6 +130,10 @@ func getReq(url, etag string, t *testing.T) (*http.Response, string) {
 		}
 	}
 
+	if gzipped {
+		req.Header.Set("Accept-Encoding", "gzip")
+	}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -116,56 +144,86 @@ func getReq(url, etag string, t *testing.T) (*http.Response, string) {
 		t.Fatal(b)
 	}
 
-	return resp, string(b)
+	return resp, b
 }
 
 func TestCache(t *testing.T) {
 	// First request should be 200.
-	r, b := getReq(srvRoot+"/cached", "", t)
+	r, b := getReq(srvRoot+"/cached", "", false, t)
 	if r.StatusCode != 200 {
 		t.Fatalf("expected 200 but got %v", r.StatusCode)
 	}
-	if b != "ok" {
+	if !bytes.Equal(b, content) {
 		t.Fatalf("expected 'ok' in body but got %v", b)
 	}
 
 	// Second should be 304.
-	r, b = getReq(srvRoot+"/cached", r.Header.Get("Etag"), t)
+	r, b = getReq(srvRoot+"/cached", r.Header.Get("Etag"), false, t)
 	if r.StatusCode != 304 {
 		t.Fatalf("expected 304 but got '%v'", r.StatusCode)
 	}
-	if b != "" {
+	if !bytes.Equal(b, []byte("")) {
 		t.Fatalf("expected empty cached body but got '%v'", b)
 	}
 
 	// Wrong etag.
-	r, b = getReq(srvRoot+"/cached", "wrong", t)
+	r, b = getReq(srvRoot+"/cached", "wrong", false, t)
 	if r.StatusCode != 200 {
 		t.Fatalf("expected 200 but got '%v'", r.StatusCode)
 	}
 
 	// Clear cache.
-	r, b = getReq(srvRoot+"/clear-group", "", t)
+	r, b = getReq(srvRoot+"/clear-group", "", false, t)
 	if r.StatusCode != 200 {
 		t.Fatalf("expected 200 but got %v", r.StatusCode)
 	}
-	r, b = getReq(srvRoot+"/cached", r.Header.Get("Etag"), t)
+	r, b = getReq(srvRoot+"/cached", r.Header.Get("Etag"), false, t)
 	if r.StatusCode != 200 {
 		t.Fatalf("expected 200 but got '%v'", r.StatusCode)
+	}
+
+	// Compressed blob.
+	r, b = getReq(srvRoot+"/compressed", "", false, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got '%v'", r.StatusCode)
+	}
+	// Uncompressed output.
+	if !bytes.Equal(b, content) {
+		t.Fatalf("expected test content in body but got %v", b)
+	}
+
+	// Compressed output.
+	r, b = getReq(srvRoot+"/compressed", r.Header.Get("Etag"), true, t)
+	if r.StatusCode != 304 {
+		t.Fatalf("expected 304 but got '%v'", r.StatusCode)
+	}
+
+	r, b = getReq(srvRoot+"/compressed", "", true, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got '%v'", r.StatusCode)
+	}
+
+	decomp, err := decompressGzip(b)
+	if err != nil {
+		t.Fatalf("error decompressing gzip: %v", err)
+	}
+
+	if !bytes.Equal(decomp, content) {
+		t.Fatalf("expected test content in body but got %v", b)
 	}
 }
 
 func TestNoCache(t *testing.T) {
 	// All requests should return 200.
 	for n := 0; n < 3; n++ {
-		r, b := getReq(srvRoot+"/no-store", "", t)
+		r, b := getReq(srvRoot+"/no-store", "", false, t)
 		if r.StatusCode != 200 {
 			t.Fatalf("expected 200 but got %v", r.StatusCode)
 		}
 		if r.Header.Get("Etag") != "" {
 			t.Fatal("there should be no etag for no-store response")
 		}
-		if b != "ok" {
+		if !bytes.Equal(b, content) {
 			t.Fatalf("expected 'ok' in body but got %v", b)
 		}
 	}
@@ -175,7 +233,7 @@ func TestNoBlob(t *testing.T) {
 	// All requests should return 200.
 	eTag := ""
 	for n := 0; n < 3; n++ {
-		r, _ := getReq(srvRoot+"/no-blob", eTag, t)
+		r, _ := getReq(srvRoot+"/no-blob", eTag, false, t)
 		if n == 0 {
 			eTag = r.Header.Get("Etag")
 			if r.StatusCode != 200 {
@@ -188,4 +246,14 @@ func TestNoBlob(t *testing.T) {
 			t.Fatalf("expected 304 but got %v", r.StatusCode)
 		}
 	}
+}
+
+func decompressGzip(b []byte) ([]byte, error) {
+	r, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	return io.ReadAll(r)
 }

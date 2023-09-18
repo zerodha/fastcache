@@ -24,9 +24,10 @@ import (
 
 const (
 	// Store keys.
-	keyEtag  = "_etag"
-	keyCtype = "_ctype"
-	keyBlob  = "_blob"
+	keyEtag        = "_etag"
+	keyCtype       = "_ctype"
+	keyCompression = "_comp"
+	keyBlob        = "_blob"
 
 	sep = ":"
 )
@@ -53,7 +54,7 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 
 	var out fastcache.Item
 	// Get content_type, etag, blob in that order.
-	resp, err := redis.ByteSlices(cn.Do("HMGET", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri)))
+	resp, err := redis.ByteSlices(cn.Do("HMGET", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyCompression, uri), s.field(keyBlob, uri)))
 	if err != nil {
 		return out, err
 	}
@@ -61,7 +62,8 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 	out = fastcache.Item{
 		ContentType: string(resp[0]),
 		ETag:        string(resp[1]),
-		Blob:        resp[2],
+		Compression: string(resp[2]),
+		Blob:        resp[3],
 	}
 	return out, err
 }
@@ -75,6 +77,7 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 	if err := cn.Send("HMSET", key,
 		s.field(keyCtype, uri), b.ContentType,
 		s.field(keyEtag, uri), b.ETag,
+		s.field(keyCompression, uri), b.Compression,
 		s.field(keyBlob, uri), b.Blob); err != nil {
 		return err
 	}
@@ -96,7 +99,7 @@ func (s *Store) Del(namespace, group, uri string) error {
 	cn := s.pool.Get()
 	defer cn.Close()
 
-	if err := cn.Send("HDEL", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri)); err != nil {
+	if err := cn.Send("HDEL", s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyCompression, uri), s.field(keyBlob, uri)); err != nil {
 		return err
 	}
 
