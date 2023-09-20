@@ -27,9 +27,10 @@ import (
 
 const (
 	// Store keys.
-	keyEtag  = "_etag"
-	keyCtype = "_ctype"
-	keyBlob  = "_blob"
+	keyEtag        = "_etag"
+	keyCtype       = "_ctype"
+	keyCompression = "_comp"
+	keyBlob        = "_blob"
 
 	sep = ":"
 )
@@ -57,7 +58,7 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 		out fastcache.Item
 	)
 	// Get content_type, etag, blob in that order.
-	cmd := s.cn.HMGet(s.ctx, s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyBlob, uri))
+	cmd := s.cn.HMGet(s.ctx, s.key(namespace, group), s.field(keyCtype, uri), s.field(keyEtag, uri), s.field(keyCompression, uri), s.field(keyBlob, uri))
 	if err := cmd.Err(); err != nil {
 		return out, err
 	}
@@ -83,7 +84,13 @@ func (s *Store) Get(namespace, group, uri string) (fastcache.Item, error) {
 		return out, errors.New("goredis-store: invalid type received for etag")
 	}
 
-	if blob, ok := resp[2].(string); ok {
+	if comp, ok := resp[2].(string); ok {
+		out.Compression = comp
+	} else {
+		return out, errors.New("goredis-store: invalid type received for etag")
+	}
+
+	if blob, ok := resp[3].(string); ok {
 		out.Blob = stringToBytes(blob)
 	} else {
 		return out, errors.New("goredis-store: invalid type received for blob")
@@ -100,9 +107,10 @@ func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Dur
 	)
 
 	if err := p.HMSet(s.ctx, key, map[string]interface{}{
-		s.field(keyCtype, uri): b.ContentType,
-		s.field(keyEtag, uri):  b.ETag,
-		s.field(keyBlob, uri):  b.Blob,
+		s.field(keyCtype, uri):       b.ContentType,
+		s.field(keyEtag, uri):        b.ETag,
+		s.field(keyCompression, uri): b.Compression,
+		s.field(keyBlob, uri):        b.Blob,
 	}).Err(); err != nil {
 		return err
 	}
@@ -125,6 +133,7 @@ func (s *Store) Del(namespace, group, uri string) error {
 	return s.cn.HDel(s.ctx, s.key(namespace, group),
 		s.field(keyCtype, uri),
 		s.field(keyEtag, uri),
+		s.field(keyCompression, uri),
 		s.field(keyBlob, uri)).Err()
 }
 
