@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"strings"
 	"time"
@@ -110,12 +111,14 @@ func New(s Store) *FastCache {
 // requests for orders can have the group "orders" so that they can be cleared
 // in one shot when something changes using the Del*() methods or Clear*() middleware.
 func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group string) fastglue.FastRequestHandler {
+	if o.Logger == nil {
+		o.Logger = log.New(io.Discard, "", 0)
+	}
+
 	return func(r *fastglue.Request) error {
 		namespace, _ := r.RequestCtx.UserValue(o.NamespaceKey).(string)
 		if namespace == "" {
-			if o.Logger != nil {
-				o.Logger.Printf("no namespace found in UserValue() for key '%s'", o.NamespaceKey)
-			}
+			o.Logger.Printf("no namespace found in UserValue() for key '%s'", o.NamespaceKey)
 			return h(r)
 		}
 
@@ -134,7 +137,7 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 
 		// Fetch etag + cached bytes from the store.
 		blob, err := f.s.Get(namespace, group, uri)
-		if err != nil && o.Logger != nil {
+		if err != nil {
 			o.Logger.Printf("error reading cache: %v", err)
 		}
 
@@ -175,7 +178,7 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 				}
 			}
 
-			if _, err := r.RequestCtx.Write(out); err != nil && o.Logger != nil {
+			if _, err := r.RequestCtx.Write(out); err != nil {
 				o.Logger.Printf("error writing request: %v", err)
 			}
 
@@ -206,23 +209,25 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 // This should ideally wrap write handlers (POST / PUT / DELETE)
 // and the cache is cleared when the handler responds with a 200.
 func (f *FastCache) ClearGroup(h fastglue.FastRequestHandler, o *Options, groups ...string) fastglue.FastRequestHandler {
+	if o.Logger == nil {
+		o.Logger = log.New(ioutil.Discard, "", 0)
+	}
+
 	return func(r *fastglue.Request) error {
 		namespace, _ := r.RequestCtx.UserValue(o.NamespaceKey).(string)
 		if namespace == "" {
-			if o.Logger != nil {
-				o.Logger.Printf("no namespace found in UserValue() for key '%s'", o.NamespaceKey)
-			}
+			o.Logger.Printf("no namespace found in UserValue() for key '%s'", o.NamespaceKey)
 			return h(r)
 		}
 
 		// Execute the actual handler.
-		if err := h(r); err != nil && o.Logger != nil {
+		if err := h(r); err != nil {
 			o.Logger.Printf("error running middleware: %v", err)
 		}
 
 		// Clear cache.
 		if r.RequestCtx.Response.StatusCode() == 200 {
-			if err := f.DelGroup(namespace, groups...); err != nil && o.Logger != nil {
+			if err := f.DelGroup(namespace, groups...); err != nil {
 				o.Logger.Printf("error while deleting groups '%v': %v", groups, err)
 			}
 		}
@@ -285,7 +290,7 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 	}
 
 	err := f.s.Put(namespace, group, uri, item, o.TTL)
-	if err != nil && o.Logger != nil {
+	if err != nil {
 		return fmt.Errorf("error writing cache to store: %v", err)
 	}
 
