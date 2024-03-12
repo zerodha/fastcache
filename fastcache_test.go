@@ -29,6 +29,8 @@ const (
 var (
 	srv = fastglue.NewGlue()
 
+	fc *fastcache.FastCache
+
 	content = []byte("this is the reasonbly long test content that may be compressed")
 )
 
@@ -113,11 +115,11 @@ func init() {
 				}
 			},
 		}
-
-		fc = fastcache.New(cachestore.New("CACHE:", redis.NewClient(&redis.Options{
-			Addr: rd.Addr(),
-		})))
 	)
+
+	fc = fastcache.New(cachestore.New("CACHE:", redis.NewClient(&redis.Options{
+		Addr: rd.Addr(),
+	})))
 
 	// Handlers.
 	srv.Before(func(r *fastglue.Request) *fastglue.Request {
@@ -268,6 +270,40 @@ func TestCache(t *testing.T) {
 
 	if !bytes.Equal(decomp, content) {
 		t.Fatalf("expected test content in body but got %v", b)
+	}
+}
+
+func TestCacheDelete(t *testing.T) {
+	// First request should be 200.
+	r, b := getReq(srvRoot+"/cached", "", false, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got %v", r.StatusCode)
+	}
+	if !bytes.Equal(b, content) {
+		t.Fatalf("expected 'ok' in body but got %v", b)
+	}
+
+	// Second should be 304.
+	r, b = getReq(srvRoot+"/cached", r.Header.Get("Etag"), false, t)
+	if r.StatusCode != 304 {
+		t.Fatalf("expected 304 but got '%v'", r.StatusCode)
+	}
+	if !bytes.Equal(b, []byte("")) {
+		t.Fatalf("expected empty cached body but got '%v'", b)
+	}
+
+	err := fc.Del(namespaceKey, group, "/cached")
+	if err != nil {
+		t.Fatalf("expected nil but got %v", err)
+	}
+
+	// New request should be 200, since the cache is deleted.
+	r, b = getReq(srvRoot+"/cached", "", false, t)
+	if r.StatusCode != 200 {
+		t.Fatalf("expected 200 but got %v", r.StatusCode)
+	}
+	if !bytes.Equal(b, content) {
+		t.Fatalf("expected 'ok' in body but got %v", b)
 	}
 }
 

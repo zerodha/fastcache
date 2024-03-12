@@ -132,10 +132,10 @@ func (f *FastCache) Cached(h fastglue.FastRequestHandler, o *Options, group stri
 			o.Compression.MinLength = 500
 		}
 
-		uri := f.makeURI(r, o)
+		hashedURI := hash(f.makeURI(r, o))
 
 		// Fetch etag + cached bytes from the store.
-		blob, err := f.s.Get(namespace, group, uri)
+		blob, err := f.s.Get(namespace, group, hashedURI)
 		if err != nil {
 			o.Logger.Printf("error reading cache: %v", err)
 		}
@@ -236,7 +236,7 @@ func (f *FastCache) ClearGroup(h fastglue.FastRequestHandler, o *Options, groups
 
 // Del deletes the cache for a single URI in a namespace->group.
 func (f *FastCache) Del(namespace, group, uri string) error {
-	return f.s.Del(namespace, group, uri)
+	return f.s.Del(namespace, group, hash(uri))
 }
 
 // DelGroup deletes all cached URIs under a group.
@@ -244,9 +244,15 @@ func (f *FastCache) DelGroup(namespace string, group ...string) error {
 	return f.s.DelGroup(namespace, group...)
 }
 
-func (f *FastCache) makeURI(r *fastglue.Request, o *Options) string {
-	var hash [16]byte
+// hash returns the md5 hash of a string.
+func hash(b string) string {
+	var hash [16]byte = md5.Sum([]byte(b))
 
+	return hex.EncodeToString(hash[:])
+}
+
+// makeURI returns the URI to be used as the cache key.
+func (f *FastCache) makeURI(r *fastglue.Request, o *Options) string {
 	// lexicographically sort the query string.
 	r.RequestCtx.QueryArgs().Sort(func(x, y []byte) int {
 		return bytes.Compare(x, y)
@@ -274,12 +280,10 @@ func (f *FastCache) makeURI(r *fastglue.Request, o *Options) string {
 			fasthttp.ReleaseURI(uriRaw)
 		}
 
-		hash = md5.Sum(id)
-	} else {
-		hash = md5.Sum(r.RequestCtx.URI().Path())
+		return string(id)
 	}
 
-	return hex.EncodeToString(hash[:])
+	return string(r.RequestCtx.URI().Path())
 }
 
 // cache caches a response body.
@@ -295,7 +299,7 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 	}
 
 	// Write cache to the store (etag, content type, response body).
-	uri := f.makeURI(r, o)
+	hashedURI := hash(f.makeURI(r, o))
 
 	var blob []byte
 	if !o.NoBlob {
@@ -319,7 +323,7 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 		}
 	}
 
-	err := f.s.Put(namespace, group, uri, item, o.TTL)
+	err := f.s.Put(namespace, group, hashedURI, item, o.TTL)
 	if err != nil {
 		return fmt.Errorf("error writing cache to store: %v", err)
 	}
