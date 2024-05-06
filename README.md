@@ -30,10 +30,18 @@ Cache for different URIs of the same type can be grouped under a single name so 
 The `.Del()` and `.DelGroup()` can be used to manually clear cached items when handler based clearing isn't sufficient.
 
 ## Example
+```shell
+# Install fastcache.
+go get -u github.com/zerodha/fastcache/v4
+
+# Install a store. Stores are separate packages themselves.
+go get -u github.com/zerodha/fastcache/stores/goredis
+```
+
 
 ```go
 
-    fc := fastcache.New(redisstore.New(pool))
+    fc := fastcache.New(redis.New(pool))
 
     // Long cache options.
     long := &fastcache.Options{

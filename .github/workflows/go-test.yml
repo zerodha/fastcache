@@ -7,7 +7,7 @@ jobs:
   test:
     strategy:
       matrix:
-        go: ["1.16", "1.20"]
+        go: ["1.18", "1.20"]
 
     runs-on: ubuntu-20.04
 
@@ -21,7 +21,7 @@ jobs:
           go-version: ${{ matrix.go }}
 
       - name: Run Test
-        run: go test -v ./...
+        run: go test -v github.com/zerodha/fastcache...
 
       - name: Run Coverage
-        run: go test -v -cover ./...
+        run: go test -v -cover github.com/zerodha/fastcache...

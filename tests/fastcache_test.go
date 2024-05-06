@@ -1,4 +1,4 @@
-package fastcache_test
+package tests
 
 import (
 	"bytes"
