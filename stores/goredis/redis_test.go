@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
-	"github.com/zerodha/fastcache/v3"
+	"github.com/zerodha/fastcache/v4"
 )
 
 func newTestRedis(t *testing.T) *redis.Client {

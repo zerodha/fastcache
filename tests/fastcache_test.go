@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis"
-	redis "github.com/go-redis/redis/v8"
+	redis "github.com/redis/go-redis/v9"
 	"github.com/valyala/fasthttp"
-	"github.com/zerodha/fastcache/v3"
-	cachestore "github.com/zerodha/fastcache/v3/stores/goredis"
+	cachestore "github.com/zerodha/fastcache/stores/goredis/v9"
+	"github.com/zerodha/fastcache/v4"
 	"github.com/zerodha/fastglue"
 )
 

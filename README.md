@@ -35,7 +35,7 @@ The `.Del()` and `.DelGroup()` can be used to manually clear cached items when h
 go get -u github.com/zerodha/fastcache/v4
 
 # Install a store. Stores are separate packages themselves.
-go get -u github.com/zerodha/fastcache/stores/goredis
+go get -u github.com/zerodha/fastcache/stores/goredis/v9
 ```
 
 

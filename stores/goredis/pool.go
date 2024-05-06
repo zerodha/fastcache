@@ -3,7 +3,7 @@ package goredis
 import (
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 )
 
 // NewPool returns a Redigo cachepool.
