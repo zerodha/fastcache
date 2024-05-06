@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
-	"github.com/zerodha/fastcache/v3"
+	"github.com/zerodha/fastcache/v4"
 )
 
 const (

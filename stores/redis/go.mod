@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	github.com/gomodule/redigo v2.0.0+incompatible
-	github.com/zerodha/fastcache/v3 v3.3.0
+	github.com/zerodha/fastcache/v4 v4.0.0
 )
 
 require (

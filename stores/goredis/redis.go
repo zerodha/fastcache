@@ -22,7 +22,7 @@ import (
 	"unsafe"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/zerodha/fastcache/v3"
+	"github.com/zerodha/fastcache/v4"
 )
 
 const (

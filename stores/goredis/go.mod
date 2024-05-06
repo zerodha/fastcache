@@ -6,7 +6,6 @@ require (
 	github.com/alicebob/miniredis v2.5.0+incompatible
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/stretchr/testify v1.9.0
-	github.com/zerodha/fastcache/v3 v3.3.0
 	github.com/zerodha/fastcache/v4 v4.0.0
 )
 
