@@ -1,10 +1,10 @@
-module github.com/zerodha/fastcache/v4
+module github.com/zerodha/fastcache/stores/redis
 
 go 1.18
 
 require (
-	github.com/valyala/fasthttp v1.34.0
-	github.com/zerodha/fastglue v1.7.1
+	github.com/gomodule/redigo v2.0.0+incompatible
+	github.com/zerodha/fastcache/v3 v3.3.0
 )
 
 require (
@@ -16,5 +16,7 @@ require (
 	github.com/savsgio/gotils v0.0.0-20211223103454-d0aaa54c5899 // indirect
 	github.com/stretchr/testify v1.6.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasthttp v1.34.0 // indirect
+	github.com/zerodha/fastglue v1.7.1 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c // indirect
 )
