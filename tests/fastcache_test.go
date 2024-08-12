@@ -3,8 +3,10 @@ package tests
 import (
 	"bytes"
 	"compress/gzip"
+	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"testing"
@@ -19,17 +21,32 @@ import (
 )
 
 const (
-	srvAddr      = ":10200"
-	srvRoot      = "http://127.0.0.1:10200"
 	namespaceKey = "req"
 	group        = "test"
 )
 
 var (
-	srv = fastglue.NewGlue()
+	srv     = fastglue.NewGlue()
+	srvAddr = dummyServAddr()
+	srvRoot = "http://127.0.0.1" + srvAddr
 
 	content = []byte("this is the reasonbly long test content that may be compressed")
 )
+
+// dummyServeAddr returns a random port address.
+func dummyServAddr() string {
+	// Dynamically allocate an available port
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		panic(err)
+	}
+	defer listener.Close()
+
+	// Get the actual port that was allocated
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	return fmt.Sprintf(":%d", port)
+}
 
 func init() {
 	// Setup fastcache.
