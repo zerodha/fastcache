@@ -13,6 +13,12 @@
 //	}
 //
 // ```
+//
+// This library also supports async mode which is dependent on the go-redis
+// library. ref:
+// https://github.com/redis/go-redis/discussions/2597#discussioncomment-5909650
+//
+// ```
 package goredis
 
 import (
@@ -45,6 +51,7 @@ type Store struct {
 
 type Config struct {
 	// Prefix is the prefix to apply to all cache keys.
+	// Note: in async mode you can use braces to specify the {sharding_key}.
 	Prefix string
 
 	// Async enables async writes to Redis. If enabled, writes are buffered
@@ -72,6 +79,11 @@ func New(cfg Config, client redis.UniversalClient) *Store {
 
 	// Start the async worker if enabled.
 	if cfg.Async {
+		// Set defaults.
+		if s.config.AsyncBufSize == 0 {
+			s.config.AsyncBufSize = 1000
+		}
+
 		s.putBuf = make(chan putReq, s.config.AsyncBufSize)
 		go s.putWorker()
 	}
