@@ -59,9 +59,9 @@ func ExampleNew() {
 	}
 
 	// Output:
-	// {etag content_type [123 125]}
-	// {etag content_type [123 125]}
-	// {etag content_type [123 125]}
-	// {etag content_type [123 125]}
-	// {etag content_type [123 125]}
+	// {content_type  etag [123 125]}
+	// {content_type  etag [123 125]}
+	// {content_type  etag [123 125]}
+	// {content_type  etag [123 125]}
+	// {content_type  etag [123 125]}
 }
