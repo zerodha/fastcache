@@ -1,3 +1,6 @@
+//go:build clustertest
+// +build clustertest
+
 package goredis
 
 import (

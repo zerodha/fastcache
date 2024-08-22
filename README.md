@@ -63,3 +63,26 @@ go get -u github.com/zerodha/fastcache/stores/goredis/v9
     // Clear the orders group. Multiple groups can be specified like: orders, positions ...
     g.DELETE("/orders/:order_id",auth(app.respcache.ClearGroup(handleDeleteMarketwatchItems, short, []string{"orders"})))
 ```
+
+## Dev Notes
+
+### Running Tests
+
+```shell
+    go test -v github.com/zerodha/fastcache...
+```
+
+### Running Cluster Example Tests
+
+Start the docker-compose cluster with the following command:
+
+```shell
+    cd stores/goredis
+    docker-compose up -d
+```
+
+Run the tests with the following command:
+
+```shell
+    go test -tags clustertest -v github.com/zerodha/fastcache...
+```
