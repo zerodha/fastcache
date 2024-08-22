@@ -1,6 +1,7 @@
 package goredis
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"testing"
@@ -79,66 +80,69 @@ func TestAsyncWritesToCluster(t *testing.T) {
 	assert.Error(t, err)
 }
 
-// func TestAsyncWritesWithNodeFailure(t *testing.T) {
-// 	redisCluster, miniredisInstances := newTestRedisCluster(t)
+func TestAsyncWritesWithNodeFailure(t *testing.T) {
+	redisCluster, miniredisInstances := newTestRedisCluster(t)
 
-// 	testPrefix := "TEST:"
-// 	testNamespace := "namespace"
-// 	testGroup := "group"
-// 	testEndpoint := "/test/endpoint"
-// 	testItem := fastcache.Item{
-// 		ETag:        "etag",
-// 		ContentType: "content_type",
-// 		Blob:        []byte("{}"),
-// 	}
+	testPrefix := "TEST:"
+	testNamespace := "namespace"
+	testGroup := "group"
+	testEndpoint := "/test/endpoint"
+	testItem := fastcache.Item{
+		ETag:        "etag",
+		ContentType: "content_type",
+		Blob:        []byte("{}"),
+	}
 
-// 	pool := New(Config{
-// 		Prefix:             testPrefix,
-// 		Async:              true,
-// 		AsyncMaxCommitSize: 50,
-// 		AsyncBufSize:       50,
-// 		AsyncBufTimeout:    100 * time.Millisecond,
-// 	}, redisCluster)
+	pool := New(Config{
+		Prefix:             testPrefix,
+		Async:              true,
+		AsyncMaxCommitSize: 50,
+		AsyncBufSize:       50,
+		AsyncBufTimeout:    100 * time.Millisecond,
+	}, redisCluster)
 
-// 	// Start async writes
-// 	for i := 0; i < 10; i++ {
-// 		err := pool.Put(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, i), testItem, time.Second*3)
-// 		assert.NoError(t, err)
-// 	}
+	// Start async writes
+	for i := 0; i < 10; i++ {
+		err := pool.Put(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, i), testItem, time.Second*3)
+		assert.NoError(t, err)
+	}
 
-// 	// Simulate node failure by stopping one of the miniredis instances
-// 	miniredisInstances[1].Close()
+	// Lets complete the async writes
+	time.Sleep(200 * time.Millisecond)
 
-// 	// Continue with more writes
-// 	for i := 10; i < 20; i++ {
-// 		err := pool.Put(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, i), testItem, time.Second*3)
-// 		assert.NoError(t, err)
-// 	}
+	// Simulate node failure by stopping one of the miniredis instances
+	miniredisInstances[1].Close()
 
-// 	// Wait for async writes to complete
-// 	time.Sleep(500 * time.Millisecond)
+	// Continue with more writes
+	for i := 10; i < 20; i++ {
+		err := pool.Put(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, i), testItem, time.Second*3)
+		assert.NoError(t, err)
+	}
 
-// 	// Verify the writes
-// 	successCount := 0
-// 	for i := 0; i < 20; i++ {
-// 		item, err := pool.Get(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, i))
-// 		if err == nil &&
-// 			item.ETag == testItem.ETag &&
-// 			item.ContentType == testItem.ContentType &&
-// 			bytes.Equal(item.Blob, testItem.Blob) &&
-// 			item.Compression == testItem.Compression {
-// 			successCount++
-// 		}
-// 	}
+	// Wait for async writes to complete
+	time.Sleep(200 * time.Millisecond)
 
-// 	// We expect some writes to succeed, but not all due to the node failure
-// 	assert.True(t, successCount > 0 && successCount < 20, "Expected some successful writes, but not all. Got %d successful writes", successCount)
+	// Verify the writes
+	successCount := 0
+	for i := 0; i < 20; i++ {
+		item, err := pool.Get(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, i))
+		if err == nil &&
+			item.ETag == testItem.ETag &&
+			item.ContentType == testItem.ContentType &&
+			bytes.Equal(item.Blob, testItem.Blob) &&
+			item.Compression == testItem.Compression {
+			successCount++
+		}
+	}
 
-// 	// Test deletion
-// 	err := pool.DelGroup(testNamespace, testGroup)
-// 	assert.NoError(t, err)
+	// We expect some writes to succeed, but not all due to the node failure
+	assert.True(t, successCount > 0 && successCount < 20, "Expected some successful writes, but not all. Got %d successful writes", successCount)
 
-// 	// Verify deletion
-// 	_, err = pool.Get(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, 0))
-// 	assert.Error(t, err)
-// }
+	// Test deletion
+	err := pool.DelGroup(testNamespace, testGroup)
+	assert.NoError(t, err)
+
+	// Verify deletion
+	_, err = pool.Get(testNamespace, testGroup, fmt.Sprintf("%s%d", testEndpoint, 0))
+	assert.Error(t, err)
+}
