@@ -11,7 +11,7 @@ import (
 
 func ExampleNew() {
 	pool := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:           []string{"0.0.0.0:6379", "0.0.0.0:6380", "0.0.0.0:6381", "0.0.0.0:6382", "0.0.0.0:6383", "0.0.0.0:6384"},
+		Addrs:           []string{"localhost:6379", "localhost:6380", "localhost:6381", "localhost:6382", "localhost:6383", "localhost:6384"},
 		MinIdleConns:    1,
 		MaxActiveConns:  10,
 		DialTimeout:     time.Second * 1,
@@ -39,7 +39,7 @@ func ExampleNew() {
 	}, pool)
 
 	// Perform async writes
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 5; i++ {
 		_ = cl.Put("namespace", "group", fmt.Sprintf("/test/endpoint%d", i), fastcache.Item{
 			ETag:        "etag",
 			ContentType: "content_type",
@@ -47,7 +47,9 @@ func ExampleNew() {
 		}, time.Second*3)
 	}
 
-	for i := 0; i < 20; i++ {
+	time.Sleep(time.Millisecond * 200)
+
+	for i := 0; i < 5; i++ {
 		item, err := cl.Get("namespace", "group", fmt.Sprintf("/test/endpoint%d", i))
 		if err != nil {
 			fmt.Println(err)
@@ -57,5 +59,9 @@ func ExampleNew() {
 	}
 
 	// Output:
+	// {etag content_type [123 125]}
+	// {etag content_type [123 125]}
+	// {etag content_type [123 125]}
+	// {etag content_type [123 125]}
 	// {etag content_type [123 125]}
 }
