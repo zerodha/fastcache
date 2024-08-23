@@ -52,7 +52,7 @@ func TestAsyncWritesToCluster(t *testing.T) {
 		Async:              true,
 		AsyncMaxCommitSize: 5,
 		AsyncBufSize:       10,
-		AsyncBufTimeout:    100 * time.Millisecond,
+		AsyncCommitFreq:    100 * time.Millisecond,
 	}, redisCluster)
 
 	// Perform async writes
@@ -98,7 +98,7 @@ func TestAsyncWritesWithNodeFailure(t *testing.T) {
 		Async:              true,
 		AsyncMaxCommitSize: 50,
 		AsyncBufSize:       50,
-		AsyncBufTimeout:    100 * time.Millisecond,
+		AsyncCommitFreq:    100 * time.Millisecond,
 	}, redisCluster)
 
 	// Start async writes

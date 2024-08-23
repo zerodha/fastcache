@@ -61,11 +61,12 @@ type Config struct {
 	// batch.
 	AsyncMaxCommitSize int
 	// AsyncBufSize is the size of the write buffer, i.e. the channel size for
-	// async writes.
+	// async writes. If the buffer is full, writes will block; so make sure to
+	// set this to a reasonable value, ideally higher than maxCommitSize.
 	AsyncBufSize int
-	// AsyncBufTimeout is the maximum time to wait before committing the write
+	// AsyncCommitFreq is the time to wait before committing the write
 	// buffer.
-	AsyncBufTimeout time.Duration
+	AsyncCommitFreq time.Duration
 }
 
 // New creates a new Redis instance. prefix is the prefix to apply to all
@@ -82,6 +83,14 @@ func New(cfg Config, client redis.UniversalClient) *Store {
 		// Set defaults.
 		if s.config.AsyncBufSize == 0 {
 			s.config.AsyncBufSize = 1000
+		}
+
+		if s.config.AsyncMaxCommitSize == 0 {
+			s.config.AsyncMaxCommitSize = 100
+		}
+
+		if s.config.AsyncCommitFreq == 0 {
+			s.config.AsyncCommitFreq = 100 * time.Millisecond
 		}
 
 		s.putBuf = make(chan putReq, s.config.AsyncBufSize)
@@ -188,7 +197,7 @@ func (s *Store) putWorker() {
 	var (
 		p     = s.cn.Pipeline()
 		count = 0
-		timer = time.NewTimer(s.config.AsyncBufTimeout).C
+		timer = time.NewTimer(s.config.AsyncCommitFreq).C
 	)
 	for {
 		select {

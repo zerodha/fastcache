@@ -46,7 +46,7 @@ func TestNew(t *testing.T) {
 				Async:              async,
 				AsyncMaxCommitSize: 5,
 				AsyncBufSize:       10,
-				AsyncBufTimeout:    100 * time.Millisecond,
+				AsyncCommitFreq:    100 * time.Millisecond,
 			}, redisClient)
 
 			// Check empty get, should return proper error and not panic.
