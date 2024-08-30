@@ -72,17 +72,26 @@ go get -u github.com/zerodha/fastcache/stores/goredis/v9
     go test -v github.com/zerodha/fastcache...
 ```
 
-### Running Cluster Example Tests
+### Running Cluster Tests
 
-Start the docker-compose cluster with the following command:
+Cluster tests require testcontainers (and docker) to run redis containers.
 
-```shell
-    cd stores/goredis
-    docker-compose up -d
-```
+Therefore, we have kept the cluster tests in a separate file and
+they are tagged with `clustertest`. If you want to run the cluster tests,
+you need to have docker installed and running.
 
-Run the tests with the following command:
+
+
+
+After that you can simply run the tests with the following command:
 
 ```shell
     go test -tags clustertest -v github.com/zerodha/fastcache...
+```
+
+We also provide a `redis-cluster-docker-compose.yml` file that can be 
+used to start a redis cluster for local testing.
+
+```shell
+    docker-compose -f redis-cluster-docker-compose.yml up -d
 ```
