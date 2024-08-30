@@ -197,8 +197,10 @@ func (s *Store) putWorker() {
 	var (
 		p     = s.cn.Pipeline()
 		count = 0
-		timer = time.NewTimer(s.config.AsyncCommitFreq).C
+		timer = time.NewTimer(s.config.AsyncCommitFreq)
 	)
+	defer timer.Stop()
+
 	for {
 		select {
 		case req := <-s.putBuf:
@@ -209,6 +211,7 @@ func (s *Store) putWorker() {
 				s.field(keyCompression, req.uri): req.b.Compression,
 				s.field(keyBlob, req.uri):        req.b.Blob,
 			}).Err(); err != nil {
+				// Log error
 				continue
 			}
 
@@ -217,26 +220,37 @@ func (s *Store) putWorker() {
 			// hashmap as a group. Needs some work here.
 			if req.ttl.Seconds() > 0 {
 				if err := p.PExpire(s.ctx, key, req.ttl).Err(); err != nil {
+					// Log error
 					continue
 				}
 			}
 
 			if count++; count > s.config.AsyncMaxCommitSize {
 				if _, err := p.Exec(s.ctx); err != nil {
-					// Log error.
+					// Log error
 				}
 				count = 0
 				p = s.cn.Pipeline()
+				// Reset the timer
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(s.config.AsyncCommitFreq)
 			}
 
-		case <-timer:
+		case <-timer.C:
 			if count > 0 {
 				if _, err := p.Exec(s.ctx); err != nil {
-					// Log error.
+					// Log error
 				}
 				count = 0
 				p = s.cn.Pipeline()
 			}
+			// Reset the timer
+			timer.Reset(s.config.AsyncCommitFreq)
 
 		case <-s.ctx.Done():
 			return
