@@ -24,6 +24,8 @@ package goredis
 import (
 	"context"
 	"errors"
+	"io"
+	"log"
 	"time"
 	"unsafe"
 
@@ -47,6 +49,7 @@ type Store struct {
 	putBuf chan putReq
 	cn     redis.UniversalClient
 	ctx    context.Context
+	logger *log.Logger
 }
 
 type Config struct {
@@ -67,6 +70,9 @@ type Config struct {
 	// AsyncCommitFreq is the time to wait before committing the write
 	// buffer.
 	AsyncCommitFreq time.Duration
+	// Logger is an optional logger to which errors will be written. If it is
+	// nil, errors are sent to io.Discard.
+	Logger *log.Logger
 }
 
 // New creates a new Redis instance. prefix is the prefix to apply to all
@@ -75,7 +81,12 @@ func New(cfg Config, client redis.UniversalClient) *Store {
 	s := &Store{
 		config: cfg,
 		cn:     client,
+		logger: cfg.Logger,
 		ctx:    context.TODO(),
+	}
+
+	if s.logger == nil {
+		s.logger = log.New(io.Discard, "", 0)
 	}
 
 	// Start the async worker if enabled.
@@ -227,7 +238,7 @@ func (s *Store) putWorker() {
 
 			if count++; count > s.config.AsyncMaxCommitSize {
 				if _, err := p.Exec(s.ctx); err != nil {
-					// Log error
+					s.logger.Printf("goredis-store: error committing async writes: %v", err)
 				}
 				count = 0
 				p = s.cn.Pipeline()
@@ -236,7 +247,7 @@ func (s *Store) putWorker() {
 		case <-ticker.C:
 			if count > 0 {
 				if _, err := p.Exec(s.ctx); err != nil {
-					// Log error
+					s.logger.Printf("goredis-store: error committing ticker async writes: %v", err)
 				}
 				count = 0
 				p = s.cn.Pipeline()
