@@ -96,7 +96,7 @@ var cacheNoStore = []byte("no-store")
 // New creates and returns a new FastCache instance.
 func New(s Store) *FastCache {
 	return &FastCache{
-		s: s,
+		s: newSingleflightStore(s),
 	}
 }
 
