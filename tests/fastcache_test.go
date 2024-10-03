@@ -87,7 +87,10 @@ func init() {
 			Logger:       log.New(os.Stdout, "", log.Ldate|log.Ltime|log.Lshortfile),
 		}
 
-		fc = fastcache.New(cachestore.New("CACHE:", redis.NewClient(&redis.Options{
+		fc = fastcache.New(cachestore.New(cachestore.Config{
+			Prefix: "CACHE:",
+			Async:  false,
+		}, redis.NewClient(&redis.Options{
 			Addr: rd.Addr(),
 		})))
 	)
