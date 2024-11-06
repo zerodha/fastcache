@@ -169,7 +169,14 @@ type putReq struct {
 // Put sets a value to given session but stored only on commit
 func (s *Store) Put(namespace, group, uri string, b fastcache.Item, ttl time.Duration) error {
 	if s.config.Async {
-		s.putBuf <- putReq{namespace, group, uri, b, ttl}
+		// If the mode is async, we need to copy b.Blob to prevent
+		// fasthttp from reusing the buffer since we are going to
+		// use the buffer in a separate goroutine beyond the scope
+		// of the current request.
+		copiedItem := b
+		copiedItem.Blob = append([]byte(nil), b.Blob...)
+
+		s.putBuf <- putReq{namespace, group, uri, copiedItem, ttl}
 		return nil
 	}
 
