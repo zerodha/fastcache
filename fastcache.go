@@ -77,7 +77,9 @@ type Item struct {
 	ContentType string
 	Compression string
 	ETag        string
-	Blob        []byte
+	// If the Blob is used beyond the scope of the request, it should be copied.
+	// Such as when the cache is written asynchronously.
+	Blob []byte
 }
 
 // Store represents a backend data store where bytes are cached. Individual
