@@ -278,15 +278,16 @@ func (s *Store) Del(namespace, group, uri string) error {
 
 // DelGroup deletes a whole group.
 func (s *Store) DelGroup(namespace string, groups ...string) error {
-	p := s.cn.Pipeline()
-	for _, group := range groups {
-		if err := p.Del(s.ctx, s.key(namespace, group)).Err(); err != nil {
-			return err
-		}
+	if len(groups) == 0 {
+		return nil
 	}
 
-	_, err := p.Exec(s.ctx)
-	return err
+	keys := make([]string, len(groups))
+	for i, group := range groups {
+		keys[i] = s.key(namespace, group)
+	}
+
+	return s.cn.Del(s.ctx, keys...).Err()
 }
 
 func (s *Store) key(namespace, group string) string {
