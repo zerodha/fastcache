@@ -51,7 +51,8 @@ type Options struct {
 	NamespaceKey string
 
 	// TTL for a cache item. If this is not set, no TTL is applied to cached
-	// items.
+	// items. A positive time.Duration in RequestCtx.UserValue(CustomTTLKey)
+	// overrides this value if it is shorter, or if TTL is non-positive.
 	TTL time.Duration
 
 	// Process ETags and send 304s?
@@ -92,6 +93,12 @@ type Store interface {
 }
 
 const compGzip = "gzip"
+
+// CustomTTLKey is the RequestCtx user value key for a custom cache TTL.
+// Set a positive time.Duration in a middleware or handler to shorten Options.TTL,
+// or to set an expiry when Options.TTL is non-positive. Other values are ignored.
+// This is read when caching a response and does not affect existing cache hits.
+const CustomTTLKey = "fastcache_custom_ttl"
 
 var cacheNoStore = []byte("no-store")
 
@@ -291,7 +298,14 @@ func (f *FastCache) cache(r *fastglue.Request, namespace, group string, o *Optio
 		}
 	}
 
-	err := f.s.Put(namespace, group, uri, item, o.TTL)
+	ttl := o.TTL
+	if custom, ok := r.RequestCtx.UserValue(CustomTTLKey).(time.Duration); ok && custom > 0 {
+		if ttl <= 0 || custom < ttl {
+			ttl = custom
+		}
+	}
+
+	err := f.s.Put(namespace, group, uri, item, ttl)
 	if err != nil {
 		return fmt.Errorf("error writing cache to store: %v", err)
 	}

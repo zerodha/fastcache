@@ -29,6 +29,28 @@ Cache for different URIs of the same type can be grouped under a single name so 
 
 The `.Del()` and `.DelGroup()` can be used to manually clear cached items when handler based clearing isn't sufficient.
 
+## Custom TTL
+
+A GET handler or middleware can set a TTL for the response being cached:
+
+```go
+r.RequestCtx.SetUserValue(fastcache.CustomTTLKey, 30*time.Second)
+```
+
+`fastcache.CustomTTLKey` is `"fastcache_custom_ttl"`. The value must be a positive
+`time.Duration`. The effective TTL is the shorter of this value and `Options.TTL`.
+If `Options.TTL` is non-positive (no expiry), the custom TTL is used. Missing,
+non-positive, or incorrectly typed values leave `Options.TTL` unchanged. To skip
+caching, set the response's `Cache-Control` header to `no-store` instead.
+
+The custom TTL is read after the handler returns, when its response is cached.
+It does not change the shared options or affect an existing cache hit.
+
+The Redis stores apply TTLs to the entire namespace/group hash, rather than to
+individual responses. A shorter TTL can expire other responses in that group,
+and later writes can reset the group's expiry and extend earlier responses'
+lifetimes. Use separate groups where different expiry policies are needed.
+
 ## Example
 ```shell
 # Install fastcache.
